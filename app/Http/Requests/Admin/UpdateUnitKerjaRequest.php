@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Http\Requests\Admin;
+
+use App\Models\UnitKerja;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class UpdateUnitKerjaRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()?->isAdmin() ?? false;
+    }
+
+    public function rules(): array
+    {
+        $unitKerja = $this->route('unit_kerja');
+        $unitId = $unitKerja instanceof UnitKerja ? $unitKerja->id : ($unitKerja ?? $this->route('id'));
+
+        return [
+            'kode_unit' => ['sometimes', 'string', 'max:50', Rule::unique('unit_kerja', 'kode_unit')->ignore($unitId)],
+            'nama_unit' => ['sometimes', 'string', 'max:255'],
+            'tipe' => ['sometimes', 'in:bidang,seksi,sub_bagian,unit'],
+            'id_induk' => ['nullable', 'exists:unit_kerja,id', 'different:'.$unitId],
+            'id_pembimbing' => ['nullable', 'exists:pembimbing,id', Rule::unique('unit_kerja', 'id_pembimbing')->ignore($unitId)],
+            'status' => ['nullable', 'string', 'max:50'],
+        ];
+    }
+}
