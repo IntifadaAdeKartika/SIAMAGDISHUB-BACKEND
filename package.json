@@ -6,6 +6,9 @@
         "build": "echo 'No build needed'",
         "dev": "vite"
     },
+    "engines": {
+        "node": "22.x"
+    },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
         "concurrently": "^10.0.3",
