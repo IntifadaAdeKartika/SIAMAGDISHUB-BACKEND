@@ -29,6 +29,20 @@ class VerifikasiAbsensiController extends Controller
             return response()->json(['success' => false, 'message' => 'Profil pembimbing tidak ditemukan.'], 404);
         }
 
+        // Validasi kepemilikan: Pembimbing hanya boleh memverifikasi
+        // absensi peserta yang berada di unit kerja miliknya.
+        if (
+            $pembimbing->id_unit_kerja === null
+            || ! $absensi->pesertaMagang()
+                ->where('id_unit_kerja', $pembimbing->id_unit_kerja)
+                ->exists()
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Absensi tidak ditemukan di unit kerja Anda.',
+            ], 404);
+        }
+
         // ATURAN KEAMANAN: Setelah diverifikasi approved, data absensi TIDAK BOLEH diubah lagi
         if ($absensi->status_verifikasi === 'approved') {
             return response()->json([

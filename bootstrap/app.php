@@ -21,9 +21,16 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->statefulApi();
+
+        $middleware->redirectGuestsTo(
+            fn ($request) => $request->is('backend-api/*')
+                ? null
+                : route('login')
+        );
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->shouldRenderJsonWhen(function ($request, $e) {
-            return $request->is('api/*') || $request->expectsJson();
+            return $request->is('backend-api/*')
+                || $request->expectsJson();
         });
     })->create();
