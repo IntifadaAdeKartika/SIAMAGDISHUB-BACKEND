@@ -29,6 +29,16 @@ return Application::configure(basePath: dirname(__DIR__))
         );
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Diagnostic logging sementara untuk Vercel
+        $exceptions->report(function (Throwable $e) {
+            error_log('[SIAMAG_EXCEPTION] '.json_encode([
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        });
+
         $exceptions->shouldRenderJsonWhen(function ($request, $e) {
             return $request->is('backend-api/*')
                 || $request->expectsJson();
