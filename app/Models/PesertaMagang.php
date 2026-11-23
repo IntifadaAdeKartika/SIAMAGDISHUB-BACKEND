@@ -59,6 +59,17 @@ class PesertaMagang extends Model
         return $this->belongsTo(UnitKerja::class, 'id_unit_kerja');
     }
 
+    /**
+     * Pembimbing lapangan efektif untuk peserta ini.
+     *
+     * Mengikuti unit kerja peserta, dengan cadangan ke relasi
+     * pembimbing.id_unit_kerja bila unit_kerja.id_pembimbing kosong.
+     */
+    public function pembimbingLapangan(): ?Pembimbing
+    {
+        return $this->unitKerja?->pembimbingEfektif();
+    }
+
     public function absensiList(): HasMany
     {
         return $this->hasMany(Absensi::class, 'id_peserta_magang');

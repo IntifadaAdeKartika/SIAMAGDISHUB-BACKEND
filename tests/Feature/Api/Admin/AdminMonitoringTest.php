@@ -200,22 +200,32 @@ class AdminMonitoringTest extends TestCase
 
         $this->actingAs($admin, 'sanctum');
 
+        // Absensi: peserta_magang.unit_kerja dan peserta_magang.pembimbing harus terisi
         $this->getJson('/backend-api/admin/absensi')
             ->assertOk()
             ->assertJsonPath('data.data.0.peserta_magang.pengguna.nama_lengkap', 'Peserta Contoh')
+            ->assertJsonPath('data.data.0.peserta_magang.unit_kerja.nama_unit', 'Unit Admin')
+            ->assertJsonPath('data.data.0.peserta_magang.unit_kerja.pembimbing.pengguna.nama_lengkap', 'Pembimbing')
+            ->assertJsonPath('data.data.0.peserta_magang.pembimbing.pengguna.nama_lengkap', 'Pembimbing')
             ->assertJsonPath('data.data.0.unit_kerja.pembimbing.pengguna.nama_lengkap', 'Pembimbing')
             ->assertJsonPath('data.data.0.verifikator.pengguna.nama_lengkap', 'Pembimbing');
+
+        // Logbook: peserta_magang.unit_kerja dan peserta_magang.pembimbing harus terisi
         $this->getJson('/backend-api/admin/logbook')
             ->assertOk()
             ->assertJsonPath('data.data.0.peserta_magang.pengguna.nama_lengkap', 'Peserta Contoh')
             ->assertJsonPath('data.data.0.peserta_magang.unit_kerja.nama_unit', 'Unit Admin')
             ->assertJsonPath('data.data.0.peserta_magang.unit_kerja.pembimbing.pengguna.nama_lengkap', 'Pembimbing')
+            ->assertJsonPath('data.data.0.peserta_magang.pembimbing.pengguna.nama_lengkap', 'Pembimbing')
             ->assertJsonPath('data.data.0.verifikator.pengguna.nama_lengkap', 'Pembimbing');
+
+        // Pengajuan Izin: menggunakan PengajuanIzinResource sehingga peserta_magang.pembimbing tersedia
         $this->getJson('/backend-api/admin/pengajuan-izin')
             ->assertOk()
             ->assertJsonPath('data.data.0.peserta_magang.pengguna.nama_lengkap', 'Peserta Contoh')
             ->assertJsonPath('data.data.0.peserta_magang.unit_kerja.nama_unit', 'Unit Admin')
             ->assertJsonPath('data.data.0.peserta_magang.unit_kerja.pembimbing.pengguna.nama_lengkap', 'Pembimbing')
+            ->assertJsonPath('data.data.0.peserta_magang.pembimbing.pengguna.nama_lengkap', 'Pembimbing')
             ->assertJsonPath('data.data.0.verifikator.pengguna.nama_lengkap', 'Pembimbing');
     }
 

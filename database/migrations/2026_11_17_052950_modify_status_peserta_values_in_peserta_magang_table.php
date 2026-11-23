@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -11,11 +10,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Hapus CHECK constraint lama.
-        DB::statement("
-            ALTER TABLE peserta_magang
-            DROP CONSTRAINT peserta_magang_status_peserta_check
-        ");
+        $driver = DB::getDriverName();
+
+        // 1. Hapus CHECK constraint lama (hanya PostgreSQL — SQLite tidak memilikinya).
+        if ($driver !== 'sqlite') {
+            DB::statement('
+                ALTER TABLE peserta_magang
+                DROP CONSTRAINT peserta_magang_status_peserta_check
+            ');
+        }
 
         // 2. Konversi status lama ke status baru.
         DB::statement("
@@ -29,18 +32,20 @@ return new class extends Migration
             END
         ");
 
-        // 3. Tambahkan CHECK constraint baru.
-        DB::statement("
-            ALTER TABLE peserta_magang
-            ADD CONSTRAINT peserta_magang_status_peserta_check
-            CHECK (
-                status_peserta IN (
-                    'belum mulai',
-                    'aktif',
-                    'tidak aktif'
+        // 3. Tambahkan CHECK constraint baru (hanya PostgreSQL).
+        if ($driver !== 'sqlite') {
+            DB::statement("
+                ALTER TABLE peserta_magang
+                ADD CONSTRAINT peserta_magang_status_peserta_check
+                CHECK (
+                    status_peserta IN (
+                        'belum mulai',
+                        'aktif',
+                        'tidak aktif'
+                    )
                 )
-            )
-        ");
+            ");
+        }
     }
 
     /**
@@ -48,15 +53,17 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // 1. Hapus CHECK constraint baru.
-        DB::statement("
-            ALTER TABLE peserta_magang
-            DROP CONSTRAINT peserta_magang_status_peserta_check
-        ");
+        $driver = DB::getDriverName();
+
+        // 1. Hapus CHECK constraint baru (hanya PostgreSQL).
+        if ($driver !== 'sqlite') {
+            DB::statement('
+                ALTER TABLE peserta_magang
+                DROP CONSTRAINT peserta_magang_status_peserta_check
+            ');
+        }
 
         // 2. Kembalikan status ke format lama.
-        // 'belum mulai' dikembalikan menjadi 'pending'.
-        // 'tidak aktif' dikembalikan menjadi 'selesai'.
         DB::statement("
             UPDATE peserta_magang
             SET status_peserta = CASE
@@ -68,19 +75,21 @@ return new class extends Migration
             END
         ");
 
-        // 3. Pulihkan CHECK constraint lama.
-        DB::statement("
-            ALTER TABLE peserta_magang
-            ADD CONSTRAINT peserta_magang_status_peserta_check
-            CHECK (
-                status_peserta IN (
-                    'aktif',
-                    'selesai',
-                    'keluar',
-                    'menunggu',
-                    'pending'
+        // 3. Pulihkan CHECK constraint lama (hanya PostgreSQL).
+        if ($driver !== 'sqlite') {
+            DB::statement("
+                ALTER TABLE peserta_magang
+                ADD CONSTRAINT peserta_magang_status_peserta_check
+                CHECK (
+                    status_peserta IN (
+                        'aktif',
+                        'selesai',
+                        'keluar',
+                        'menunggu',
+                        'pending'
+                    )
                 )
-            )
-        ");
+            ");
+        }
     }
 };

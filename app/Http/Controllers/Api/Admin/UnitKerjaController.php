@@ -26,7 +26,7 @@ class UnitKerjaController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = UnitKerja::with(['induk', 'pembimbing.pengguna']);
+        $query = UnitKerja::with(['induk', 'pembimbing.pengguna', 'pembimbingByUnit.pengguna']);
 
         if ($request->filled('tipe')) {
             $query->where('tipe', $request->tipe);
@@ -61,13 +61,15 @@ class UnitKerjaController extends Controller
 
         \DB::beginTransaction();
         try {
+            // Lepas pembimbing dari unit lain lebih dulu agar tidak melanggar UNIQUE.
+            if (! empty($validated['id_pembimbing'])) {
+                UnitKerja::where('id_pembimbing', $validated['id_pembimbing'])->update(['id_pembimbing' => null]);
+            }
+
             $unit = UnitKerja::create($validated);
 
             // Sinkronisasi relasi pembimbing
             if (! empty($unit->id_pembimbing)) {
-                // Lepas pembimbing ini dari unit lain jika ada
-                UnitKerja::where('id_pembimbing', $unit->id_pembimbing)->where('id', '!=', $unit->id)->update(['id_pembimbing' => null]);
-
                 // Set unit kerja di tabel pembimbing
                 Pembimbing::where('id', $unit->id_pembimbing)->update(['id_unit_kerja' => $unit->id]);
             }
@@ -78,7 +80,7 @@ class UnitKerjaController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Unit kerja berhasil dibuat.',
-                'data' => new UnitKerjaResource($unit->load(['induk', 'pembimbing.pengguna'])),
+                'data' => new UnitKerjaResource($unit->load(['induk', 'pembimbing.pengguna', 'pembimbingByUnit.pengguna'])),
             ], 201);
         } catch (\Exception $e) {
             \DB::rollBack();
@@ -91,7 +93,7 @@ class UnitKerjaController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => new UnitKerjaResource($unitKerja->load(['induk', 'pembimbing.pengguna', 'subUnit'])),
+            'data' => new UnitKerjaResource($unitKerja->load(['induk', 'pembimbing.pengguna', 'pembimbingByUnit.pengguna', 'subUnit'])),
         ]);
     }
 
@@ -102,24 +104,26 @@ class UnitKerjaController extends Controller
         \DB::beginTransaction();
         try {
             $oldPembimbingId = $unitKerja->id_pembimbing;
+
+            // Lepas pembimbing baru dari unit lain lebih dulu agar tidak bentrok UNIQUE.
+            if (! empty($validated['id_pembimbing'])) {
+                UnitKerja::where('id_pembimbing', $validated['id_pembimbing'])
+                    ->where('id', '!=', $unitKerja->id)
+                    ->update(['id_pembimbing' => null]);
+            }
+
             $unitKerja->update($validated);
 
-            if (! empty($unitKerja->id_pembimbing)) {
-                // Jika pembimbing diganti, lepaskan unit lama dari pembimbing lama (opsional, tergantung kebutuhan)
-                if ($oldPembimbingId && $oldPembimbingId != $unitKerja->id_pembimbing) {
-                    Pembimbing::where('id', $oldPembimbingId)->update(['id_unit_kerja' => null]);
-                }
+            $newPembimbingId = $unitKerja->id_pembimbing;
 
-                // Lepas pembimbing baru ini dari unit lain agar tidak bentrok UNIQUE
-                UnitKerja::where('id_pembimbing', $unitKerja->id_pembimbing)->where('id', '!=', $unitKerja->id)->update(['id_pembimbing' => null]);
+            // Jika pembimbing diganti/dikosongkan, lepaskan dari unit lama.
+            if ($oldPembimbingId && $oldPembimbingId != $newPembimbingId) {
+                Pembimbing::where('id', $oldPembimbingId)->update(['id_unit_kerja' => null]);
+            }
 
-                // Set unit kerja di tabel pembimbing
-                Pembimbing::where('id', $unitKerja->id_pembimbing)->update(['id_unit_kerja' => $unitKerja->id]);
-            } else {
-                // Jika id_pembimbing dikosongkan (null)
-                if ($oldPembimbingId) {
-                    Pembimbing::where('id', $oldPembimbingId)->update(['id_unit_kerja' => null]);
-                }
+            // Set unit kerja di tabel pembimbing.
+            if (! empty($newPembimbingId)) {
+                Pembimbing::where('id', $newPembimbingId)->update(['id_unit_kerja' => $unitKerja->id]);
             }
 
             ActivityLogger::log('UPDATE_UNIT_KERJA', "Admin memperbarui unit kerja: {$unitKerja->nama_unit}");
@@ -128,7 +132,7 @@ class UnitKerjaController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Unit kerja berhasil diperbarui.',
-                'data' => new UnitKerjaResource($unitKerja->fresh(['induk', 'pembimbing.pengguna'])),
+                'data' => new UnitKerjaResource($unitKerja->fresh(['induk', 'pembimbing.pengguna', 'pembimbingByUnit.pengguna'])),
             ]);
         } catch (\Exception $e) {
             \DB::rollBack();

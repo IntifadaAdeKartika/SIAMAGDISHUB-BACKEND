@@ -33,7 +33,7 @@ class UpdateUnitKerjaRequest extends FormRequest
             'nama_unit' => ['sometimes', 'string', 'max:255'],
             'tipe' => ['sometimes', 'in:sekretariat,sub_bagian,bidang,seksi,upt'],
             'id_induk' => ['nullable', 'exists:unit_kerja,id', 'different:'.$unitId],
-            'id_pembimbing' => ['nullable', 'exists:pembimbing,id', Rule::unique('unit_kerja', 'id_pembimbing')->ignore($unitId)],
+            'id_pembimbing' => ['nullable', 'exists:pembimbing,id'],
             'status' => ['nullable', 'string', 'max:50'],
         ];
     }

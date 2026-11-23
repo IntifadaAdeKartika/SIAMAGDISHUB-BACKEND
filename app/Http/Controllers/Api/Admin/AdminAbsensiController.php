@@ -13,7 +13,10 @@ class AdminAbsensiController extends Controller
     {
         $absensi = Absensi::with([
             'pesertaMagang.pengguna',
+            'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
             'unitKerja.pembimbing.pengguna',
+            'unitKerja.pembimbingByUnit.pengguna',
             'verifikator.pengguna',
         ])
             ->latest('tanggal_jam')

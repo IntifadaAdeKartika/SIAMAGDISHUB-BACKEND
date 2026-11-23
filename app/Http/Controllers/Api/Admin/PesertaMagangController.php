@@ -21,6 +21,7 @@ class PesertaMagangController extends Controller
         $query = PesertaMagang::with([
             'pengguna',
             'unitKerja.pembimbing.pengguna',
+            'unitKerja.pembimbingByUnit.pengguna',
         ]);
 
         if ($request->filled('id_unit_kerja')) {
@@ -93,7 +94,7 @@ class PesertaMagangController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Peserta magang berhasil ditambahkan.',
-            'data' => new PesertaMagangResource($peserta->load(['pengguna', 'unitKerja.pembimbing.pengguna'])),
+            'data' => new PesertaMagangResource($peserta->load(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna'])),
         ], 201);
     }
 
@@ -101,7 +102,7 @@ class PesertaMagangController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => new PesertaMagangResource($pesertaMagang->load(['pengguna', 'unitKerja.pembimbing.pengguna'])),
+            'data' => new PesertaMagangResource($pesertaMagang->load(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna'])),
         ]);
     }
 
@@ -140,7 +141,7 @@ class PesertaMagangController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Data peserta magang berhasil diperbarui.',
-            'data' => new PesertaMagangResource($pesertaMagang->fresh(['pengguna', 'unitKerja.pembimbing.pengguna'])),
+            'data' => new PesertaMagangResource($pesertaMagang->fresh(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna'])),
         ]);
     }
 

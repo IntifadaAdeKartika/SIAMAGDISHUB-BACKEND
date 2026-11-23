@@ -28,7 +28,7 @@ class StoreUnitKerjaRequest extends FormRequest
             // PERBAIKAN: Tambahkan sekretariat dan upt
             'tipe' => ['required', 'in:sekretariat,sub_bagian,bidang,seksi,upt'],
             'id_induk' => ['nullable', 'exists:unit_kerja,id'],
-            'id_pembimbing' => ['nullable', 'exists:pembimbing,id', 'unique:unit_kerja,id_pembimbing'],
+            'id_pembimbing' => ['nullable', 'exists:pembimbing,id'],
             'status' => ['nullable', 'string', 'max:50'],
         ];
     }

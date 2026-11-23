@@ -14,6 +14,7 @@ class AdminLogbookController extends Controller
         $logbooks = Logbook::with([
             'pesertaMagang.pengguna',
             'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
             'verifikator.pengguna',
         ])
             ->latest('tanggal')

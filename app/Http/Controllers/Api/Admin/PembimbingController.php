@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\UpdatePembimbingRequest;
 use App\Http\Resources\PembimbingResource;
 use App\Models\Pembimbing;
 use App\Models\Pengguna;
+use App\Models\UnitKerja;
 use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class PembimbingController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Pembimbing::with(['pengguna', 'unitKerja']);
+        $query = Pembimbing::with(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna']);
 
         if ($request->filled('id_unit_kerja')) {
             $query->where('id_unit_kerja', $request->id_unit_kerja);
@@ -60,7 +61,7 @@ class PembimbingController extends Controller
                 'dibuat_oleh' => $request->user()->id,
             ]);
 
-            return Pembimbing::create([
+            $pembimbing = Pembimbing::create([
                 'id_pengguna' => $pengguna->id,
                 'id_unit_kerja' => $validated['id_unit_kerja'],
                 'nip' => $validated['nip'],
@@ -69,6 +70,16 @@ class PembimbingController extends Controller
                 'tanggal_mulai_tugas' => $validated['tanggal_mulai_tugas'] ?? null,
                 'tanggal_selesai_tugas' => $validated['tanggal_selesai_tugas'] ?? null,
             ]);
+
+            // Sinkronisasi: tandai unit kerja ini memiliki pembimbing utama
+            // jika unit kerja belum memiliki pembimbing yang ditetapkan.
+            if (! empty($validated['id_unit_kerja'])) {
+                UnitKerja::where('id', $validated['id_unit_kerja'])
+                    ->whereNull('id_pembimbing')
+                    ->update(['id_pembimbing' => $pembimbing->id]);
+            }
+
+            return $pembimbing;
         });
 
         ActivityLogger::log('CREATE_PEMBIMBING', "Admin menambahkan pembimbing: {$pembimbing->id}");
@@ -76,7 +87,7 @@ class PembimbingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Pembimbing berhasil ditambahkan.',
-            'data' => new PembimbingResource($pembimbing->load(['pengguna', 'unitKerja'])),
+            'data' => new PembimbingResource($pembimbing->load(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna'])),
         ], 201);
     }
 
@@ -84,7 +95,7 @@ class PembimbingController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => new PembimbingResource($pembimbing->load(['pengguna', 'unitKerja'])),
+            'data' => new PembimbingResource($pembimbing->load(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna'])),
         ]);
     }
 
@@ -113,7 +124,27 @@ class PembimbingController extends Controller
 
             $pembimbingData = array_diff_key($validated, array_flip(['username', 'password', 'nama_lengkap', 'no_hp']));
             if (! empty($pembimbingData)) {
+                $oldUnitKerjaId = $pembimbing->id_unit_kerja;
                 $pembimbing->update($pembimbingData);
+
+                // Sinkronisasi unit_kerja.id_pembimbing saat unit kerja berubah.
+                if (array_key_exists('id_unit_kerja', $pembimbingData)) {
+                    $newUnitKerjaId = $pembimbing->id_unit_kerja;
+
+                    // Lepaskan dari unit lama jika pembimbing ini adalah pembimbing utamanya.
+                    if ($oldUnitKerjaId && $oldUnitKerjaId !== $newUnitKerjaId) {
+                        UnitKerja::where('id', $oldUnitKerjaId)
+                            ->where('id_pembimbing', $pembimbing->id)
+                            ->update(['id_pembimbing' => null]);
+                    }
+
+                    // Daftarkan ke unit baru jika belum ada pembimbing utama.
+                    if ($newUnitKerjaId) {
+                        UnitKerja::where('id', $newUnitKerjaId)
+                            ->whereNull('id_pembimbing')
+                            ->update(['id_pembimbing' => $pembimbing->id]);
+                    }
+                }
             }
         });
 
@@ -122,7 +153,7 @@ class PembimbingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Data pembimbing berhasil diperbarui.',
-            'data' => new PembimbingResource($pembimbing->fresh(['pengguna', 'unitKerja'])),
+            'data' => new PembimbingResource($pembimbing->fresh(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna'])),
         ]);
     }
 

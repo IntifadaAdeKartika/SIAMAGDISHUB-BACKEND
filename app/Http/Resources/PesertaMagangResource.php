@@ -12,7 +12,7 @@ class PesertaMagangResource extends JsonResource
     {
         $fileService = app(FileUploadService::class);
         $unitKerja = $this->relationLoaded('unitKerja') ? $this->unitKerja : ($this->relationLoaded('unit_kerja') ? $this->unit_kerja : null);
-        $pembimbing = $unitKerja?->pembimbing ?? $unitKerja?->pembimbingUtama;
+        $pembimbing = $unitKerja?->pembimbingEfektif();
         $absensiHariIni = $this->relationLoaded('absensiList') ? $this->absensiList : collect();
         $logbookHariIni = $this->relationLoaded('logbookList') ? $this->logbookList : collect();
         $absensiTerakhirHariIni = $absensiHariIni->first();

@@ -9,9 +9,7 @@ class UnitKerjaResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $pembimbing = $this->relationLoaded('pembimbing')
-            ? $this->pembimbing
-            : ($this->relationLoaded('pembimbingUtama') ? $this->pembimbingUtama : null);
+        $pembimbing = $this->pembimbingEfektif();
 
         return [
             'id' => $this->id,
