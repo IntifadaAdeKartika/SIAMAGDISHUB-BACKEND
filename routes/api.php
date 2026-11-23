@@ -85,7 +85,9 @@ Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
     // ==========================================
     Route::middleware('role:peserta_magang')->group(function (): void {
         // Presensi & Geofencing
+        Route::get('/check-in', [AbsensiController::class, 'today']);
         Route::post('/check-in', [AbsensiController::class, 'checkIn']);
+        Route::get('/check-out', [AbsensiController::class, 'today']);
         Route::post('/check-out', [AbsensiController::class, 'checkOut']);
         Route::get('/absensi/today', [AbsensiController::class, 'today']);
 
