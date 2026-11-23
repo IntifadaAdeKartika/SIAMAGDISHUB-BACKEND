@@ -1,0 +1,4 @@
+name: SiamagProd
+values:
+  - key: token
+    value: ''

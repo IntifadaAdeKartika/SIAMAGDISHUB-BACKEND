@@ -24,7 +24,7 @@ return [
         'http://localhost:3000',
         'http://localhost:5173',
         'http://127.0.0.1:5500',
-        'https://*.vercel.app',
+        'https://siamagdishub.vercel.app',
     ]),
 
     'allowed_origins_patterns' => [
