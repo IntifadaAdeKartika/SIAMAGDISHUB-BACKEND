@@ -15,6 +15,16 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'backend-api',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Agar Laravel percaya pada Proxy Vercel
+        $middleware->trustProxies(at: '*');
+
+        $middleware->alias([
+            'role' => CheckRole::class,
+            'inactivity' => CheckTokenInactivity::class,
+        ]);
+
+        $middleware->statefulApi();
+
         $middleware->alias([
             'role' => CheckRole::class,
             'inactivity' => CheckTokenInactivity::class,
