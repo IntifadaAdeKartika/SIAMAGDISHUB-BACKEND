@@ -106,6 +106,14 @@ class AbsensiController extends Controller
                 $fotoPath = $this->handleSelfieUpload($request->foto_selfie);
                 $lokasiFinal = $request->lokasi ?: $geoCheck['matched_office']['name'];
 
+                // Pastikan kolom foto_selfie & paraf_pembimbing bertipe TEXT di database
+                try {
+                    DB::statement('ALTER TABLE absensi ALTER COLUMN foto_selfie TYPE TEXT');
+                    DB::statement('ALTER TABLE absensi ALTER COLUMN paraf_pembimbing TYPE TEXT');
+                } catch (\Throwable) {
+                    // Abaikan jika sudah bertipe TEXT
+                }
+
                 $absensi = Absensi::create([
                     'id_peserta_magang' => $peserta->id,
                     'id_unit_kerja' => $peserta->id_unit_kerja,
@@ -202,6 +210,12 @@ class AbsensiController extends Controller
 
         $fotoPath = $this->handleSelfieUpload($request->foto_selfie);
         $lokasiFinal = $request->lokasi ?: $geoCheck['matched_office']['name'];
+
+        try {
+            DB::statement('ALTER TABLE absensi ALTER COLUMN foto_selfie TYPE TEXT');
+            DB::statement('ALTER TABLE absensi ALTER COLUMN paraf_pembimbing TYPE TEXT');
+        } catch (\Throwable) {
+        }
 
         $absensi = Absensi::create([
             'id_peserta_magang' => $peserta->id,

@@ -42,6 +42,31 @@ use Illuminate\Support\Facades\Route;
 // ==========================================
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::get('/migrate-db', function () {
+    try {
+        DB::statement('ALTER TABLE absensi ALTER COLUMN foto_selfie TYPE TEXT');
+        DB::statement('ALTER TABLE absensi ALTER COLUMN paraf_pembimbing TYPE TEXT');
+        DB::statement('ALTER TABLE logbook ALTER COLUMN foto_kegiatan TYPE TEXT');
+        DB::statement('ALTER TABLE logbook ALTER COLUMN paraf_pembimbing TYPE TEXT');
+        DB::statement('ALTER TABLE pengajuan_izin ALTER COLUMN file_surat TYPE TEXT');
+        DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_permohonan TYPE TEXT');
+        DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_balasan TYPE TEXT');
+
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kolom gambar dan paraf berhasil diubah ke TEXT di database Vercel!',
+            'artisan' => \Illuminate\Support\Facades\Artisan::output(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+});
+
 // Group Rute Terproteksi Sanctum & Session Inactivity Timeout (1 menit)
 Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
 
