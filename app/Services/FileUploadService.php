@@ -18,55 +18,65 @@ class FileUploadService
 
     /**
      * Upload an uploaded file instance.
+     * Fallback to base64 Data URI if disk is not writable (e.g. serverless Vercel).
      */
     public function upload(UploadedFile $file, string $directory): string
     {
-        $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
-        $path = $file->storeAs($directory, $filename, $this->disk);
+        try {
+            if (! $this->isDiskWritable()) {
+                $mime = $file->getMimeType() ?: 'application/octet-stream';
+                $content = base64_encode($file->get());
 
-        return $path;
+                return "data:{$mime};base64,{$content}";
+            }
+
+            $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
+
+            return $file->storeAs($directory, $filename, $this->disk);
+        } catch (\Throwable) {
+            // Fallback to base64 Data URI if storage write fails
+            $mime = $file->getMimeType() ?: 'application/octet-stream';
+            $content = base64_encode($file->get());
+
+            return "data:{$mime};base64,{$content}";
+        }
     }
 
     /**
-     * Upload binary or base64 string (useful for digital signatures / webcam capture).
+     * Store binary or base64 string directly as Data URI (avoids writing to read-only disk on Vercel).
      */
     public function uploadBase64(string $base64Data, string $directory, string $extension = 'png'): string
     {
-        // Handle data URI scheme if present (e.g. data:image/png;base64,...)
-        if (str_contains($base64Data, ';base64,')) {
-            [$meta, $data] = explode(';base64,', $base64Data, 2);
-            if (preg_match('/data:image\/(\w+)/', $meta, $matches)) {
-                $extension = $matches[1];
-            }
-            $base64Data = $data;
+        // If it's already a Data URI, return directly
+        if (str_starts_with($base64Data, 'data:')) {
+            return $base64Data;
         }
 
-        $decoded = base64_decode($base64Data);
-        $filename = $directory.'/'.Str::uuid().'.'.$extension;
-
-        Storage::disk($this->disk)->put($filename, $decoded);
-
-        return $filename;
+        return "data:image/{$extension};base64,{$base64Data}";
     }
 
     /**
-     * Delete a file if it exists.
+     * Delete a file if it exists on disk.
      */
     public function delete(?string $path): bool
     {
-        if (! $path) {
+        if (! $path || str_starts_with($path, 'data:')) {
             return false;
         }
 
-        if (Storage::disk($this->disk)->exists($path)) {
-            return Storage::disk($this->disk)->delete($path);
+        try {
+            if (Storage::disk($this->disk)->exists($path)) {
+                return Storage::disk($this->disk)->delete($path);
+            }
+        } catch (\Throwable) {
+            return false;
         }
 
         return false;
     }
 
     /**
-     * Get the public URL of a file.
+     * Get the public URL of a file or the Data URI if stored as base64.
      */
     public function url(?string $path): ?string
     {
@@ -74,7 +84,16 @@ class FileUploadService
             return null;
         }
 
-        return Storage::disk($this->disk)->url($path);
+        // If stored as Data URI (Base64), return directly
+        if (str_starts_with($path, 'data:')) {
+            return $path;
+        }
+
+        try {
+            return Storage::disk($this->disk)->url($path);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -82,10 +101,35 @@ class FileUploadService
      */
     public function downloadResponse(string $path, ?string $filename = null): StreamedResponse
     {
+        if (str_starts_with($path, 'data:')) {
+            [$meta, $data] = explode(';base64,', $path, 2);
+            $mime = str_replace('data:', '', $meta);
+            $decoded = base64_decode($data);
+            $filename = $filename ?: 'file.bin';
+
+            return response()->streamDownload(function () use ($decoded): void {
+                echo $decoded;
+            }, $filename, ['Content-Type' => $mime]);
+        }
+
         if (! Storage::disk($this->disk)->exists($path)) {
             abort(404, 'File tidak ditemukan di penyimpanan server.');
         }
 
         return Storage::disk($this->disk)->download($path, $filename);
+    }
+
+    /**
+     * Check if the current storage disk root directory is writable.
+     */
+    protected function isDiskWritable(): bool
+    {
+        try {
+            $root = Storage::disk($this->disk)->path('');
+
+            return is_dir($root) && is_writable($root);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

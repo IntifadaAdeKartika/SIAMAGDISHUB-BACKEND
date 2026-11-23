@@ -25,13 +25,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->statefulApi();
 
-        $middleware->alias([
-            'role' => CheckRole::class,
-            'inactivity' => CheckTokenInactivity::class,
-        ]);
-
-        $middleware->statefulApi();
-
         $middleware->redirectGuestsTo(
             fn ($request) => $request->is('backend-api/*')
                 ? null

@@ -245,10 +245,6 @@ class AbsensiController extends Controller
                 'check_in' => $checkIn ? new AbsensiResource($checkIn) : null,
                 'check_out' => $checkOut ? new AbsensiResource($checkOut) : null,
             ],
-            'has_checked_in' => ! is_null($checkIn),
-            'has_checked_out' => ! is_null($checkOut),
-            'check_in' => $checkIn ? new AbsensiResource($checkIn) : null,
-            'check_out' => $checkOut ? new AbsensiResource($checkOut) : null,
         ]);
     }
 
