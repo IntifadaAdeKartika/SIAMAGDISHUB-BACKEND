@@ -33,7 +33,10 @@ class MonitoringController extends Controller
 
         $query = Absensi::with([
             'pesertaMagang.pengguna',
-            'pesertaMagang.unitKerja',
+            'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+            'unitKerja.pembimbing.pengguna',
+            'unitKerja.pembimbingByUnit.pengguna',
         ])
             ->where('id_unit_kerja', $pembimbing->id_unit_kerja)
             ->whereHas('pesertaMagang', function (Builder $pesertaQuery) use ($pembimbing): void {
@@ -74,6 +77,7 @@ class MonitoringController extends Controller
         $query = PesertaMagang::with([
             'pengguna',
             'unitKerja.pembimbing.pengguna',
+            'unitKerja.pembimbingByUnit.pengguna',
             'absensiList' => function (HasMany $query) use ($today): void {
                 $query->whereDate('tanggal_jam', $today)->latest('tanggal_jam');
             },

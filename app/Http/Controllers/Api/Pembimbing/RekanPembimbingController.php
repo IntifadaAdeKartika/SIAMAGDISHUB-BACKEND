@@ -14,7 +14,8 @@ class RekanPembimbingController extends Controller
     {
         $pembimbingList = Pembimbing::with([
             'pengguna',
-            'unitKerja',
+            'unitKerja.pembimbing.pengguna',
+            'unitKerja.pembimbingByUnit.pengguna',
             'pesertaBimbingan' => function (HasMany $query): void {
                 $query
                     ->select(['id', 'id_pengguna', 'id_unit_kerja', 'asal_sekolah_kampus'])

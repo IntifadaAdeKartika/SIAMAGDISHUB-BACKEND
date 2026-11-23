@@ -92,7 +92,13 @@ class AbsensiController extends Controller
                         return response()->json([
                             'success' => true,
                             'message' => 'Check-in ulang berhasil dicatat.',
-                            'data' => new AbsensiResource($existingCheckIn->fresh(['unitKerja', 'pesertaMagang.pengguna'])),
+                            'data' => new AbsensiResource($existingCheckIn->fresh([
+                                'unitKerja.pembimbing.pengguna',
+                                'unitKerja.pembimbingByUnit.pengguna',
+                                'pesertaMagang.pengguna',
+                                'pesertaMagang.unitKerja.pembimbing.pengguna',
+                                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+                            ])),
                         ]);
                     }
 
@@ -133,7 +139,13 @@ class AbsensiController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => 'Presensi masuk (Check-In) berhasil dicatat.',
-                    'data' => new AbsensiResource($absensi->load(['unitKerja', 'pesertaMagang.pengguna'])),
+                    'data' => new AbsensiResource($absensi->load([
+                        'unitKerja.pembimbing.pengguna',
+                        'unitKerja.pembimbingByUnit.pengguna',
+                        'pesertaMagang.pengguna',
+                        'pesertaMagang.unitKerja.pembimbing.pengguna',
+                        'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+                    ])),
                 ], 201);
             });
         } catch (\Throwable $e) {
@@ -235,7 +247,13 @@ class AbsensiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Presensi keluar (Check-Out) berhasil dicatat.',
-            'data' => new AbsensiResource($absensi->load(['unitKerja', 'pesertaMagang.pengguna'])),
+            'data' => new AbsensiResource($absensi->load([
+                'unitKerja.pembimbing.pengguna',
+                'unitKerja.pembimbingByUnit.pengguna',
+                'pesertaMagang.pengguna',
+                'pesertaMagang.unitKerja.pembimbing.pengguna',
+                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+            ])),
         ], 201);
     }
 
@@ -286,7 +304,7 @@ class AbsensiController extends Controller
 
     private function notifyPembimbingCheckIn(PesertaMagang $peserta, string $namaPeserta): void
     {
-        $idPenggunaPembimbing = $peserta->unitKerja?->pembimbing?->id_pengguna;
+        $idPenggunaPembimbing = $peserta->pembimbingLapangan()?->id_pengguna;
 
         if ($idPenggunaPembimbing === null) {
             return;

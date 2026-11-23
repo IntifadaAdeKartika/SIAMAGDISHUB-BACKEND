@@ -58,7 +58,9 @@ class LaporanPembimbingController extends Controller
         $query = Absensi::with([
             'pesertaMagang.pengguna',
             'pesertaMagang.unitKerja.pembimbing.pengguna',
-            'unitKerja',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+            'unitKerja.pembimbing.pengguna',
+            'unitKerja.pembimbingByUnit.pengguna',
             'verifikator.pengguna',
         ]);
 
@@ -84,6 +86,7 @@ class LaporanPembimbingController extends Controller
         $query = Logbook::with([
             'pesertaMagang.pengguna',
             'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
             'verifikator.pengguna',
         ]);
 

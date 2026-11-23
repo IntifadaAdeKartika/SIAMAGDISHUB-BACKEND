@@ -24,7 +24,8 @@ class PembimbingPengajuanIzinController extends Controller
 
         $pengajuanIzin = PengajuanIzin::with([
             'pesertaMagang.pengguna',
-            'pesertaMagang.unitKerja',
+            'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
             'verifikator.pengguna',
         ])
             ->whereHas('pesertaMagang', function (Builder $query) use ($pembimbing): void {

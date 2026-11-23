@@ -45,8 +45,10 @@ class AuthController extends Controller
         ActivityLogger::log('LOGIN', 'Pengguna login ke dalam sistem', $pengguna->id);
 
         $pengguna->load([
-            'pembimbing.unitKerja',
+            'pembimbing.unitKerja.pembimbing.pengguna',
+            'pembimbing.unitKerja.pembimbingByUnit.pengguna',
             'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
         ]);
 
         return response()->json([
@@ -67,8 +69,10 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user()->load([
-            'pembimbing.unitKerja',
+            'pembimbing.unitKerja.pembimbing.pengguna',
+            'pembimbing.unitKerja.pembimbingByUnit.pengguna',
             'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
         ]);
 
         return response()->json([

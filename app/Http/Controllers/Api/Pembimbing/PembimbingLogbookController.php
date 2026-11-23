@@ -24,7 +24,8 @@ class PembimbingLogbookController extends Controller
 
         $logbooks = Logbook::with([
             'pesertaMagang.pengguna',
-            'pesertaMagang.unitKerja',
+            'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
             'verifikator.pengguna',
         ])
             ->whereHas('pesertaMagang', function (Builder $query) use ($pembimbing): void {

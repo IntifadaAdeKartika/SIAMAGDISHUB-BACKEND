@@ -15,7 +15,11 @@ class AdminDashboardController extends Controller
     public function index(): JsonResponse
     {
         $today = now()->toDateString();
-        $izinTerbaru = PengajuanIzin::with(['pesertaMagang.pengguna'])
+        $izinTerbaru = PengajuanIzin::with([
+            'pesertaMagang.pengguna',
+            'pesertaMagang.unitKerja.pembimbing.pengguna',
+            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+        ])
             ->latest()
             ->limit(5)
             ->get();

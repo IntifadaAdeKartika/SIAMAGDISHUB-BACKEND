@@ -80,6 +80,8 @@ class KoreksiLogbookController extends Controller
             'message' => 'Koreksi logbook berhasil disimpan.',
             'data' => new LogbookResource($logbook->fresh([
                 'pesertaMagang.pengguna',
+                'pesertaMagang.unitKerja.pembimbing.pengguna',
+                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
                 'verifikator.pengguna',
             ])),
         ]);

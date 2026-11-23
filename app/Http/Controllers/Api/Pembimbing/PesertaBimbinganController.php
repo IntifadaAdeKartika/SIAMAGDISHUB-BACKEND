@@ -28,6 +28,7 @@ class PesertaBimbinganController extends Controller
         $peserta = PesertaMagang::with([
             'pengguna',
             'unitKerja.pembimbing.pengguna',
+            'unitKerja.pembimbingByUnit.pengguna',
             'absensiList' => function (HasMany $query) use ($today): void {
                 $query->whereDate('tanggal_jam', $today)->latest('tanggal_jam');
             },

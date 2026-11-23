@@ -107,7 +107,7 @@ class PengajuanIzinController extends Controller
 
         ActivityLogger::log('AJUKAN_IZIN', "Peserta mengajukan izin {$request->jenis} ({$request->tanggal_mulai} s/d {$request->tanggal_selesai})");
 
-        $idPenggunaPembimbing = $peserta->unitKerja?->pembimbing?->id_pengguna;
+        $idPenggunaPembimbing = $peserta->pembimbingLapangan()?->id_pengguna;
 
         if ($idPenggunaPembimbing !== null) {
             Notifikasi::create([

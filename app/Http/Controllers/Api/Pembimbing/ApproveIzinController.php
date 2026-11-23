@@ -57,6 +57,8 @@ class ApproveIzinController extends Controller
             'message' => "Pengajuan izin berhasil di-{$request->status}.",
             'data' => new PengajuanIzinResource($pengajuanIzin->fresh([
                 'pesertaMagang.pengguna',
+                'pesertaMagang.unitKerja.pembimbing.pengguna',
+                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
                 'verifikator.pengguna',
             ])),
         ]);

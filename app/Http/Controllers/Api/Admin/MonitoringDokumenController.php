@@ -22,7 +22,7 @@ class MonitoringDokumenController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = PesertaMagang::with(['pengguna', 'unitKerja']);
+        $query = PesertaMagang::with(['pengguna', 'unitKerja.pembimbing.pengguna', 'unitKerja.pembimbingByUnit.pengguna']);
 
         if ($request->filled('id_unit_kerja')) {
             $query->where('id_unit_kerja', $request->id_unit_kerja);

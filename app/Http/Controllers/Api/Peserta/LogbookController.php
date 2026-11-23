@@ -105,7 +105,7 @@ class LogbookController extends Controller
         ActivityLogger::log('CREATE_LOGBOOK', "Peserta mengisi logbook tanggal {$request->tanggal}");
 
         if (! $logbook->is_draft) {
-            $idPenggunaPembimbing = $peserta->unitKerja?->pembimbing?->id_pengguna;
+            $idPenggunaPembimbing = $peserta->pembimbingLapangan()?->id_pengguna;
 
             if ($idPenggunaPembimbing !== null) {
                 Notifikasi::create([

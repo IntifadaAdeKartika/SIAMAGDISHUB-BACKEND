@@ -75,7 +75,14 @@ class VerifikasiAbsensiController extends Controller
         return response()->json([
             'success' => true,
             'message' => "Absensi berhasil diverifikasi dengan status '{$statusBaru}'. Data kini terkunci.",
-            'data' => new AbsensiResource($absensi->fresh(['pesertaMagang.pengguna', 'unitKerja', 'verifikator.pengguna'])),
+            'data' => new AbsensiResource($absensi->fresh([
+                'pesertaMagang.pengguna',
+                'pesertaMagang.unitKerja.pembimbing.pengguna',
+                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+                'unitKerja.pembimbing.pengguna',
+                'unitKerja.pembimbingByUnit.pengguna',
+                'verifikator.pengguna',
+            ])),
         ]);
     }
 }
