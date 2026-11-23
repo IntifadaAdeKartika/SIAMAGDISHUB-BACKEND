@@ -11,12 +11,22 @@ class StoreUnitKerjaRequest extends FormRequest
         return $this->user()?->isAdmin() ?? false;
     }
 
+    protected function prepareForValidation()
+    {
+        if ($this->has('tipe')) {
+            $this->merge([
+                'tipe' => strtolower($this->tipe)
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
             'kode_unit' => ['required', 'string', 'max:50', 'unique:unit_kerja,kode_unit'],
             'nama_unit' => ['required', 'string', 'max:255'],
-            'tipe' => ['required', 'in:bidang,seksi,sub_bagian,unit'],
+            // PERBAIKAN: Tambahkan sekretariat dan upt
+            'tipe' => ['required', 'in:sekretariat,sub_bagian,bidang,seksi,upt'],
             'id_induk' => ['nullable', 'exists:unit_kerja,id'],
             'id_pembimbing' => ['nullable', 'exists:pembimbing,id', 'unique:unit_kerja,id_pembimbing'],
             'status' => ['nullable', 'string', 'max:50'],

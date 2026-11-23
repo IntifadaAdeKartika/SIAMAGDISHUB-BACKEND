@@ -13,6 +13,16 @@ class UpdateUnitKerjaRequest extends FormRequest
         return $this->user()?->isAdmin() ?? false;
     }
 
+    // Tambahan: Ubah input jadi huruf kecil sebelum divalidasi
+    protected function prepareForValidation()
+    {
+        if ($this->has('tipe')) {
+            $this->merge([
+                'tipe' => strtolower($this->tipe)
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         $unitKerja = $this->route('unit_kerja');
@@ -21,7 +31,7 @@ class UpdateUnitKerjaRequest extends FormRequest
         return [
             'kode_unit' => ['sometimes', 'string', 'max:50', Rule::unique('unit_kerja', 'kode_unit')->ignore($unitId)],
             'nama_unit' => ['sometimes', 'string', 'max:255'],
-            'tipe' => ['sometimes', 'in:bidang,seksi,sub_bagian,unit'],
+            'tipe' => ['sometimes', 'in:sekretariat,sub_bagian,bidang,seksi,upt'],
             'id_induk' => ['nullable', 'exists:unit_kerja,id', 'different:'.$unitId],
             'id_pembimbing' => ['nullable', 'exists:pembimbing,id', Rule::unique('unit_kerja', 'id_pembimbing')->ignore($unitId)],
             'status' => ['nullable', 'string', 'max:50'],
