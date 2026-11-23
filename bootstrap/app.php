@@ -42,8 +42,16 @@ return Application::configure(basePath: dirname(__DIR__))
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         });
 
-        $exceptions->shouldRenderJsonWhen(function ($request, $e) {
-            return $request->is('backend-api/*')
-                || $request->expectsJson();
+        $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
+            if ($request->is('backend-api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'error' => $e->getMessage(),
+                    'exception' => class_basename($e),
+                    'file' => basename($e->getFile()),
+                    'line' => $e->getLine(),
+                ], 500);
+            }
         });
     })->create();
