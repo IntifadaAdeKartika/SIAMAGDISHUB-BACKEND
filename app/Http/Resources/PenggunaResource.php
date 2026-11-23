@@ -21,6 +21,15 @@ class PenggunaResource extends JsonResource
             'updated_at' => $this->updated_at?->toISOString(),
             'pembimbing' => new PembimbingResource($this->whenLoaded('pembimbing')),
             'peserta_magang' => new PesertaMagangResource($this->whenLoaded('pesertaMagang')),
+            'pesertaMagang' => new PesertaMagangResource($this->whenLoaded('pesertaMagang')),
+            'unit_kerja' => $this->when(
+                $this->relationLoaded('pesertaMagang') && $this->pesertaMagang?->relationLoaded('unitKerja'),
+                fn () => $this->pesertaMagang?->unitKerja ? new UnitKerjaResource($this->pesertaMagang->unitKerja) : null,
+                $this->when(
+                    $this->relationLoaded('pembimbing') && $this->pembimbing?->relationLoaded('unitKerja'),
+                    fn () => $this->pembimbing?->unitKerja ? new UnitKerjaResource($this->pembimbing->unitKerja) : null
+                )
+            ),
         ];
     }
 }

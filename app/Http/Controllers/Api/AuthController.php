@@ -10,20 +10,14 @@ use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Throwable;
 
 class AuthController extends Controller
 {
     /**
      * Login pengguna dan terbitkan Sanctum API Token.
      */
-
-public function login(LoginRequest $request): JsonResponse
-{
-    $stage = 'controller_entered';
-
-    try {
-        $stage = 'find_user';
+    public function login(LoginRequest $request): JsonResponse
+    {
         $pengguna = Pengguna::where('username', $request->username)->first();
 
         if (! $pengguna || ! Hash::check($request->password, $pengguna->password)) {
@@ -33,8 +27,6 @@ public function login(LoginRequest $request): JsonResponse
             ], 401);
         }
 
-        $stage = 'check_user_status';
-
         if ($pengguna->status !== 'aktif') {
             return response()->json([
                 'success' => false,
@@ -42,33 +34,20 @@ public function login(LoginRequest $request): JsonResponse
             ], 403);
         }
 
-        $stage = 'update_last_login';
-
+        // Update waktu login terakhir
         $pengguna->update([
             'terakhir_login' => now(),
         ]);
 
-        $stage = 'create_sanctum_token';
-
+        // Buat Sanctum token dengan ability sesuai role
         $token = $pengguna->createToken('auth-token', [$pengguna->role])->plainTextToken;
 
-        $stage = 'write_activity_log';
-
         ActivityLogger::log('LOGIN', 'Pengguna login ke dalam sistem', $pengguna->id);
-
-        $stage = 'load_user_relations';
 
         $pengguna->load([
             'pembimbing.unitKerja',
             'pesertaMagang.unitKerja.pembimbing.pengguna',
         ]);
-
-        $stage = 'resolve_user_resource';
-
-        $userResource = new PenggunaResource($pengguna);
-        $userResource->resolve($request);
-
-        $stage = 'build_response';
 
         return response()->json([
             'success' => true,
@@ -76,22 +55,10 @@ public function login(LoginRequest $request): JsonResponse
             'data' => [
                 'token' => $token,
                 'token_type' => 'Bearer',
-                'user' => $userResource,
+                'user' => new PenggunaResource($pengguna),
             ],
         ]);
-
-    } catch (Throwable $e) {
-        error_log('[SIAMAG_LOGIN_DIAGNOSTIC] '.json_encode([
-            'stage' => $stage,
-            'exception' => get_class($e),
-            'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-
-        throw $e;
     }
-}
 
 
     /**

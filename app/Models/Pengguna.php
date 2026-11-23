@@ -75,6 +75,11 @@ class Pengguna extends Authenticatable
         return $this->hasOne(PesertaMagang::class, 'id_pengguna');
     }
 
+    public function peserta_magang(): HasOne
+    {
+        return $this->hasOne(PesertaMagang::class, 'id_pengguna');
+    }
+
     public function notifikasi(): HasMany
     {
         return $this->hasMany(Notifikasi::class, 'id_pengguna');
