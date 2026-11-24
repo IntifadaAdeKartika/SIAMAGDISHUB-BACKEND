@@ -95,12 +95,13 @@ class NotificationEventsTest extends TestCase
         $this->assertDatabaseCount('notifikasi', 1);
     }
 
-    public function test_logbook_approval_and_rejection_notify_the_participant(): void
+    public function test_logbook_approval_revision_and_final_rejection_notify_the_participant(): void
     {
         [$unitKerja, $pembimbing] = $this->createUnitWithPembimbing('review-supervisor');
         $peserta = $this->createPeserta($unitKerja, 'review-participant', 'Nama Logbook');
         $tanggal = now()->toDateString();
         $approvedLogbook = $this->createLogbook($peserta, $tanggal);
+        $revisionLogbook = $this->createLogbook($peserta, $tanggal);
         $rejectedLogbook = $this->createLogbook($peserta, $tanggal);
 
         $this->actingAs($pembimbing->pengguna, 'sanctum')
@@ -109,9 +110,12 @@ class NotificationEventsTest extends TestCase
             ])
             ->assertOk();
 
-        $this->putJson("/backend-api/koreksi-logbook/{$rejectedLogbook->id}", [
-            'status_verifikasi' => 'rejected',
+        $this->putJson("/backend-api/pembimbing/logbook/{$revisionLogbook->id}/minta-revisi", [
             'catatan_pembimbing' => 'Mohon diperbaiki.',
+        ])->assertOk();
+
+        $this->putJson("/backend-api/pembimbing/logbook/{$rejectedLogbook->id}/tolak", [
+            'catatan_pembimbing' => 'Logbook tidak dapat diterima.',
         ])->assertOk();
 
         $this->assertDatabaseHas('notifikasi', [
@@ -123,10 +127,26 @@ class NotificationEventsTest extends TestCase
         ]);
         $this->assertDatabaseHas('notifikasi', [
             'id_pengguna' => $peserta->id_pengguna,
+            'judul' => 'Logbook Perlu Direvisi',
+            'pesan' => "Logbook Anda untuk tanggal {$tanggal} (ID #{$revisionLogbook->id}) perlu direvisi. Catatan Pembimbing: Mohon diperbaiki.",
+            'tipe' => 'warning',
+            'link' => '/peserta/logbook.html',
+        ]);
+        $this->assertDatabaseHas('logbook', [
+            'id' => $revisionLogbook->id,
+            'status_verifikasi' => 'pending',
+            'revisi_diminta' => true,
+        ]);
+        $this->assertDatabaseHas('notifikasi', [
+            'id_pengguna' => $peserta->id_pengguna,
             'judul' => 'Logbook Ditolak',
             'pesan' => "Logbook Anda untuk tanggal {$tanggal} telah ditolak oleh Pembimbing.",
             'tipe' => 'danger',
             'link' => '/peserta/logbook.html',
+        ]);
+        $this->assertDatabaseHas('logbook', [
+            'id' => $rejectedLogbook->id,
+            'status_verifikasi' => 'rejected',
         ]);
     }
 

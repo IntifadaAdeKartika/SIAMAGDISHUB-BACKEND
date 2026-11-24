@@ -26,6 +26,10 @@ class Logbook extends Model
         'diverifikasi_oleh',
         'diverifikasi_pada',
         'is_draft',
+        'revisi_diminta',
+        'revisi_diminta_pada',
+        'revisi_dikirim_pada',
+        'riwayat_revisi',
     ];
 
     protected function casts(): array
@@ -34,10 +38,24 @@ class Logbook extends Model
             'tanggal' => 'date',
             'diverifikasi_pada' => 'datetime',
             'is_draft' => 'boolean',
+            'revisi_diminta' => 'boolean',
+            'revisi_diminta_pada' => 'datetime',
+            'revisi_dikirim_pada' => 'datetime',
+            'riwayat_revisi' => 'array',
         ];
     }
 
     public function isPending(): bool
+    {
+        return $this->status_verifikasi === 'pending';
+    }
+
+    public function menungguRevisi(): bool
+    {
+        return $this->status_verifikasi === 'pending' && $this->revisi_diminta;
+    }
+
+    public function dapatDieditPeserta(): bool
     {
         return $this->status_verifikasi === 'pending';
     }

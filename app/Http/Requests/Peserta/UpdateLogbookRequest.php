@@ -16,8 +16,8 @@ class UpdateLogbookRequest extends FormRequest
         return [
             'id_absensi' => ['nullable', 'exists:absensi,id'],
             'tanggal' => ['sometimes', 'date'],
-            'jam_mulai' => ['sometimes', 'date_format:H:i'],
-            'jam_selesai' => ['sometimes', 'date_format:H:i'],
+            'jam_mulai' => ['sometimes', 'date_format:H:i,H:i:s'],
+            'jam_selesai' => ['sometimes', 'date_format:H:i,H:i:s'],
             'kegiatan' => ['sometimes', 'string'],
             'foto_kegiatan' => ['nullable'],
         ];

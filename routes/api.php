@@ -160,6 +160,10 @@ Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
         // Koreksi / Feedback Logbook
         Route::put('/koreksi-logbook/{logbook}', [KoreksiLogbookController::class, 'koreksi']);
 
+        // Alur revisi logbook: minta revisi (status tetap pending) dan penolakan final
+        Route::put('/pembimbing/logbook/{logbook}/minta-revisi', [KoreksiLogbookController::class, 'mintaRevisi']);
+        Route::put('/pembimbing/logbook/{logbook}/tolak', [KoreksiLogbookController::class, 'tolak']);
+
         // Persetujuan Izin
         Route::post('/approve-izin/{pengajuanIzin}', [ApproveIzinController::class, 'approve']);
 

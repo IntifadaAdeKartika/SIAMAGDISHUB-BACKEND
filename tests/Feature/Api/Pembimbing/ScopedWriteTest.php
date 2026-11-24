@@ -57,7 +57,7 @@ class ScopedWriteTest extends TestCase
         ]);
     }
 
-    public function test_rejected_logbook_requires_catatan_pembimbing(): void
+    public function test_revision_request_via_rejected_status_requires_catatan_pembimbing(): void
     {
         $unitKerja = $this->createUnitKerja('UNIT-REJECT-NOTE');
         $pembimbing = $this->createPembimbing($unitKerja, 'pembimbing-reject-note');
@@ -106,11 +106,11 @@ class ScopedWriteTest extends TestCase
         ]);
     }
 
-    public function test_pembimbing_rejection_persists_and_returns_catatan_pembimbing(): void
+    public function test_pembimbing_revision_request_keeps_status_pending_and_persists_catatan_pembimbing(): void
     {
-        $unitKerja = $this->createUnitKerja('UNIT-REJECTED');
-        $pembimbing = $this->createPembimbing($unitKerja, 'pembimbing-rejected');
-        $peserta = $this->createPeserta($unitKerja, 'peserta-rejected');
+        $unitKerja = $this->createUnitKerja('UNIT-REVISION');
+        $pembimbing = $this->createPembimbing($unitKerja, 'pembimbing-revision');
+        $peserta = $this->createPeserta($unitKerja, 'peserta-revision');
         $logbook = $this->createLogbook($peserta);
 
         $this->actingAs($pembimbing->pengguna, 'sanctum')
@@ -119,20 +119,25 @@ class ScopedWriteTest extends TestCase
                 'catatan_pembimbing' => 'Mohon lengkapi uraian kegiatan.',
             ])
             ->assertOk()
-            ->assertJsonPath('data.status_verifikasi', 'rejected')
+            ->assertJsonPath('data.status_verifikasi', 'pending')
+            ->assertJsonPath('data.revisi_diminta', true)
             ->assertJsonPath('data.catatan_pembimbing', 'Mohon lengkapi uraian kegiatan.')
             ->assertJsonStructure([
                 'data' => [
                     'catatan_pembimbing',
                     'paraf_pembimbing_url',
+                    'revisi_diminta_pada',
                 ],
             ]);
 
         $this->assertDatabaseHas('logbook', [
             'id' => $logbook->id,
-            'status_verifikasi' => 'rejected',
+            'status_verifikasi' => 'pending',
+            'revisi_diminta' => true,
             'catatan_pembimbing' => 'Mohon lengkapi uraian kegiatan.',
+            'diverifikasi_oleh' => $pembimbing->id,
         ]);
+        $this->assertNotSame('rejected', $logbook->fresh()->status_verifikasi);
     }
 
     public function test_pembimbing_cannot_update_records_from_another_unit(): void

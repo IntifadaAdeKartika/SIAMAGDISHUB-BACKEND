@@ -10,6 +10,7 @@ use App\Models\Absensi;
 use App\Models\Logbook;
 use App\Models\Notifikasi;
 use App\Models\PengajuanIzin;
+use App\Models\PesertaMagang;
 use App\Services\ActivityLogger;
 use App\Services\FileUploadService;
 use Illuminate\Http\JsonResponse;
@@ -152,13 +153,15 @@ class LogbookController extends Controller
             ], 403);
         }
 
-        // ATURAN BISNIS: Hanya bisa diedit jika status_verifikasi = 'pending'
-        if ($logbook->status_verifikasi !== 'pending') {
+        // ATURAN BISNIS: hanya logbook berstatus pending (termasuk yang diminta revisi) yang dapat diedit
+        if (! $logbook->dapatDieditPeserta()) {
             return response()->json([
                 'success' => false,
                 'message' => "Logbook tidak dapat diubah karena telah diverifikasi ({$logbook->status_verifikasi}).",
             ], 422);
         }
+
+        $menungguRevisi = $logbook->menungguRevisi();
 
         $validated = $request->validated();
 
@@ -190,12 +193,52 @@ class LogbookController extends Controller
 
         $logbook->update($validated);
 
+        if ($menungguRevisi) {
+            $riwayat = $logbook->riwayat_revisi ?? [];
+
+            if ($riwayat !== []) {
+                $lastKey = array_key_last($riwayat);
+                $riwayat[$lastKey]['dikirim_pada'] = now()->toISOString();
+            }
+
+            $logbook->forceFill([
+                'status_verifikasi' => 'pending',
+                'revisi_diminta' => false,
+                'revisi_dikirim_pada' => now(),
+                'riwayat_revisi' => $riwayat,
+            ])->save();
+
+            $this->notifyPembimbingAboutRevision($logbook, $peserta, $request->user()->nama_lengkap);
+
+            ActivityLogger::log('KIRIM_REVISI_LOGBOOK', "Peserta mengirimkan revisi logbook ID: {$logbook->id}");
+        }
+
         ActivityLogger::log('UPDATE_LOGBOOK', "Peserta memperbarui logbook ID: {$logbook->id}");
 
         return response()->json([
             'success' => true,
-            'message' => 'Logbook berhasil diperbarui.',
+            'message' => $menungguRevisi ? 'Revisi logbook berhasil dikirim.' : 'Logbook berhasil diperbarui.',
             'data' => new LogbookResource($logbook->fresh()),
+        ]);
+    }
+
+    private function notifyPembimbingAboutRevision(Logbook $logbook, PesertaMagang $peserta, string $namaPeserta): void
+    {
+        $idPenggunaPembimbing = $logbook->verifikator?->id_pengguna
+            ?? $peserta->pembimbingLapangan()?->id_pengguna;
+
+        if ($idPenggunaPembimbing === null) {
+            return;
+        }
+
+        $tanggal = $logbook->tanggal->toDateString();
+
+        Notifikasi::create([
+            'id_pengguna' => $idPenggunaPembimbing,
+            'judul' => 'Revisi Logbook Dikirim',
+            'pesan' => "Peserta {$namaPeserta} telah mengirimkan revisi logbook untuk tanggal {$tanggal}. Mohon diperiksa kembali.",
+            'tipe' => 'info',
+            'link' => '/pembimbing/logbook.html',
         ]);
     }
 }
