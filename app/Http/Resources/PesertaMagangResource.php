@@ -73,6 +73,7 @@ class PesertaMagangResource extends JsonResource
             'status_presensi' => $statusPresensi,
             'status_presensi_hari_ini' => $statusPresensiHariIni,
             'status_verifikasi_presensi_hari_ini' => $absensiTerakhirHariIni?->status_verifikasi,
+            'tanggal_jam_absensi' => $absensiTerakhirHariIni?->tanggal_jam?->toISOString(),
             'status_logbook_hari_ini' => $statusLogbookHariIni,
             'status_logbook_terakhir' => $logbookTerakhirHariIni?->status_verifikasi,
             'created_at' => $this->created_at?->toISOString(),
