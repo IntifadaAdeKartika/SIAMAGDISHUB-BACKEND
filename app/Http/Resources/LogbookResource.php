@@ -12,6 +12,7 @@ class LogbookResource extends JsonResource
     {
         $fileService = app(FileUploadService::class);
         $parafPembimbingUrl = $fileService->url($this->paraf_pembimbing);
+        $fotoKegiatanUrl = $fileService->url($this->foto_kegiatan);
 
         return [
             'id' => $this->id,
@@ -21,7 +22,8 @@ class LogbookResource extends JsonResource
             'jam_mulai' => $this->jam_mulai,
             'jam_selesai' => $this->jam_selesai,
             'kegiatan' => $this->kegiatan,
-            'foto_kegiatan_url' => $fileService->url($this->foto_kegiatan),
+            'foto_kegiatan' => $fotoKegiatanUrl,
+            'foto_kegiatan_url' => $fotoKegiatanUrl,
             'status_verifikasi' => $this->status_verifikasi,
             'catatan_pembimbing' => $this->catatan_pembimbing,
             'is_draft' => $this->is_draft,

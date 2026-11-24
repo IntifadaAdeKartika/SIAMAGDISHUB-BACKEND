@@ -89,6 +89,18 @@ class FileUploadService
             return $path;
         }
 
+        // If already a full URL, return directly
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        // Clean up redundant storage prefix if present
+        if (str_starts_with($path, '/storage/')) {
+            $path = substr($path, 9);
+        } elseif (str_starts_with($path, 'storage/')) {
+            $path = substr($path, 8);
+        }
+
         try {
             return Storage::disk($this->disk)->url($path);
         } catch (\Throwable) {

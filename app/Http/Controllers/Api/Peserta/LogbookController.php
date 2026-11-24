@@ -162,14 +162,29 @@ class LogbookController extends Controller
 
         $validated = $request->validated();
 
-        if ($request->has('foto_kegiatan') && ! empty($request->foto_kegiatan)) {
+        if ($request->hasFile('foto_kegiatan')) {
             $this->fileService->delete($logbook->foto_kegiatan);
-            if ($request->file('foto_kegiatan')) {
-                $validated['foto_kegiatan'] = $this->fileService->upload($request->file('foto_kegiatan'), 'logbook/foto');
+            $validated['foto_kegiatan'] = $this->fileService->upload($request->file('foto_kegiatan'), 'logbook/foto');
+        } elseif ($request->filled('foto_kegiatan') && is_string($request->foto_kegiatan)) {
+            $incoming = trim($request->foto_kegiatan);
+            $currentPath = (string) $logbook->foto_kegiatan;
+            $currentUrl = (string) $this->fileService->url($logbook->foto_kegiatan);
+
+            $isSameAsCurrent = ($incoming === $currentPath || $incoming === $currentUrl);
+            $isExistingUrl = str_starts_with($incoming, 'http://')
+                || str_starts_with($incoming, 'https://')
+                || str_starts_with($incoming, '/storage/');
+
+            if (! $isSameAsCurrent && ! $isExistingUrl) {
+                // Peserta mengunggah foto baru via Base64
+                $this->fileService->delete($logbook->foto_kegiatan);
+                $validated['foto_kegiatan'] = $this->fileService->uploadBase64($incoming, 'logbook/foto');
             } else {
-                $validated['foto_kegiatan'] = $this->fileService->uploadBase64((string) $request->foto_kegiatan, 'logbook/foto');
+                // Pertahankan foto lama jika mengirimkan path atau URL foto lama
+                unset($validated['foto_kegiatan']);
             }
         } else {
+            // Field foto tidak dikirim atau null, pertahankan foto lama
             unset($validated['foto_kegiatan']);
         }
 
