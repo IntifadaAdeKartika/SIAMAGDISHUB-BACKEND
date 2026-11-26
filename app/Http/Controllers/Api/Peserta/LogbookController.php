@@ -15,6 +15,7 @@ use App\Services\ActivityLogger;
 use App\Services\FileUploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class LogbookController extends Controller
 {
@@ -48,46 +49,29 @@ class LogbookController extends Controller
             return response()->json(['success' => false, 'message' => 'Profil peserta tidak ditemukan.'], 404);
         }
 
+        $isDraft = $request->boolean('is_draft');
+
+        // Logbook yang dikirim harus didasari absensi masuk yang disetujui atau izin approved pada tanggal kegiatan.
+        if (! $isDraft) {
+            $aksesResponse = $this->pastikanBolehMengisiLogbook($peserta, (string) $request->tanggal);
+
+            if ($aksesResponse !== null) {
+                return $aksesResponse;
+            }
+        }
+
+        $absensiResponse = $this->pastikanAbsensiMilikPeserta($request, $peserta);
+
+        if ($absensiResponse !== null) {
+            return $absensiResponse;
+        }
+
         $fotoKegiatanPath = null;
         if ($request->has('foto_kegiatan') && ! empty($request->foto_kegiatan)) {
             if ($request->file('foto_kegiatan')) {
                 $fotoKegiatanPath = $this->fileService->upload($request->file('foto_kegiatan'), 'logbook/foto');
             } else {
                 $fotoKegiatanPath = $this->fileService->uploadBase64((string) $request->foto_kegiatan, 'logbook/foto');
-            }
-        }
-
-        // Business rule: if not a draft, ensure today's absensi approved and within 24h unless approved izin exists
-        if (! $request->input('is_draft', false)) {
-            // Find today's approved absensi for participant
-            $today = now()->toDateString();
-            $absensi = Absensi::where('id_peserta_magang', $peserta->id)
-                ->whereDate('tanggal_jam', $today)
-                ->where('status_verifikasi', 'approved')
-                ->first();
-
-            if (! $absensi) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Tidak ada absensi yang disetujui untuk hari ini.',
-                ], 422);
-            }
-
-            // Check if there is an approved izin covering today
-            $hasApprovedIzin = PengajuanIzin::where('id_peserta_magang', $peserta->id)
-                ->where('status', 'approved')
-                ->whereDate('tanggal_mulai', '<=', $today)
-                ->whereDate('tanggal_selesai', '>=', $today)
-                ->exists();
-
-            if (! $hasApprovedIzin) {
-                $verifiedAt = $absensi->diverifikasi_pada;
-                if ($verifiedAt && now()->diffInHours($verifiedAt) > 24) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Waktu pengisian logbook habis (melebihi 24 jam sejak disetujui)',
-                    ], 422);
-                }
             }
         }
 
@@ -100,7 +84,7 @@ class LogbookController extends Controller
             'kegiatan' => $request->kegiatan,
             'foto_kegiatan' => $fotoKegiatanPath,
             'status_verifikasi' => 'pending',
-            'is_draft' => $request->input('is_draft', false),
+            'is_draft' => $isDraft,
         ]);
 
         ActivityLogger::log('CREATE_LOGBOOK', "Peserta mengisi logbook tanggal {$request->tanggal}");
@@ -163,6 +147,21 @@ class LogbookController extends Controller
 
         $menungguRevisi = $logbook->menungguRevisi();
 
+        if (! $logbook->is_draft) {
+            $tanggalKegiatan = (string) $request->input('tanggal', $logbook->tanggal?->toDateString());
+            $aksesResponse = $this->pastikanBolehMengisiLogbook($peserta, $tanggalKegiatan);
+
+            if ($aksesResponse !== null) {
+                return $aksesResponse;
+            }
+        }
+
+        $absensiResponse = $this->pastikanAbsensiMilikPeserta($request, $peserta);
+
+        if ($absensiResponse !== null) {
+            return $absensiResponse;
+        }
+
         $validated = $request->validated();
 
         if ($request->hasFile('foto_kegiatan')) {
@@ -220,6 +219,70 @@ class LogbookController extends Controller
             'message' => $menungguRevisi ? 'Revisi logbook berhasil dikirim.' : 'Logbook berhasil diperbarui.',
             'data' => new LogbookResource($logbook->fresh()),
         ]);
+    }
+
+    /**
+     * Logbook hanya boleh diisi jika peserta memiliki absensi masuk yang disetujui
+     * atau pengajuan izin approved yang mencakup tanggal kegiatan.
+     */
+    private function pastikanBolehMengisiLogbook(PesertaMagang $peserta, string $tanggal): ?JsonResponse
+    {
+        $tanggalKegiatan = Carbon::parse($tanggal)->toDateString();
+
+        $izinDisetujui = PengajuanIzin::where('id_peserta_magang', $peserta->id)
+            ->where('status', 'approved')
+            ->whereDate('tanggal_mulai', '<=', $tanggalKegiatan)
+            ->whereDate('tanggal_selesai', '>=', $tanggalKegiatan)
+            ->exists();
+
+        if ($izinDisetujui) {
+            return null;
+        }
+
+        $absensiMasuk = Absensi::where('id_peserta_magang', $peserta->id)
+            ->whereDate('tanggal_jam', $tanggalKegiatan)
+            ->where('status', 'masuk')
+            ->where('status_verifikasi', 'approved')
+            ->latest('tanggal_jam')
+            ->first();
+
+        if (! $absensiMasuk) {
+            return response()->json([
+                'success' => false,
+                'message' => "Tidak ada absensi masuk yang disetujui atau izin yang disetujui untuk tanggal {$tanggalKegiatan}.",
+            ], 422);
+        }
+
+        $waktuVerifikasi = $absensiMasuk->diverifikasi_pada;
+
+        if ($waktuVerifikasi && abs(now()->diffInHours($waktuVerifikasi)) > 24) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Waktu pengisian logbook habis (melebihi 24 jam sejak disetujui)',
+            ], 422);
+        }
+
+        return null;
+    }
+
+    private function pastikanAbsensiMilikPeserta(Request $request, PesertaMagang $peserta): ?JsonResponse
+    {
+        if (! $request->filled('id_absensi')) {
+            return null;
+        }
+
+        $milikPeserta = Absensi::whereKey($request->input('id_absensi'))
+            ->where('id_peserta_magang', $peserta->id)
+            ->exists();
+
+        if (! $milikPeserta) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Absensi tidak ditemukan untuk peserta ini.',
+            ], 422);
+        }
+
+        return null;
     }
 
     private function notifyPembimbingAboutRevision(Logbook $logbook, PesertaMagang $peserta, string $namaPeserta): void

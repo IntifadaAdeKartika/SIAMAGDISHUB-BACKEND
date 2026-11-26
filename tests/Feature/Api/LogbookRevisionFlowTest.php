@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Logbook;
 use App\Models\Pembimbing;
+use App\Models\PengajuanIzin;
 use App\Models\Pengguna;
 use App\Models\PesertaMagang;
 use App\Models\UnitKerja;
@@ -104,6 +105,7 @@ class LogbookRevisionFlowTest extends TestCase
     {
         [$unitKerja, $pembimbing, $penggunaPembimbing] = $this->createUnitWithPembimbing('resubmit-unit');
         $peserta = $this->createPeserta($unitKerja, 'peserta-resubmit');
+        $this->createApprovedIzin($peserta, '2026-11-19', '2026-11-22');
         $logbook = $this->createLogbook($peserta, ['tanggal' => '2026-11-20']);
 
         $this->actingAs($penggunaPembimbing, 'sanctum')
@@ -151,6 +153,7 @@ class LogbookRevisionFlowTest extends TestCase
 
         [$unitKerja, , $penggunaPembimbing] = $this->createUnitWithPembimbing('foto-unit');
         $peserta = $this->createPeserta($unitKerja, 'peserta-foto-revisi');
+        $this->createApprovedIzin($peserta, '2026-11-19', '2026-11-22');
         $logbook = $this->createLogbook($peserta, [
             'foto_kegiatan' => 'logbook/foto/awal.jpg',
         ]);
@@ -205,6 +208,7 @@ class LogbookRevisionFlowTest extends TestCase
     {
         [$unitKerja, $pembimbing, $penggunaPembimbing] = $this->createUnitWithPembimbing('approve-unit');
         $peserta = $this->createPeserta($unitKerja, 'peserta-approve');
+        $this->createApprovedIzin($peserta, '2026-11-20', '2026-11-20');
         $logbook = $this->createLogbook($peserta, ['tanggal' => '2026-11-20']);
 
         $this->actingAs($penggunaPembimbing, 'sanctum')
@@ -407,6 +411,18 @@ class LogbookRevisionFlowTest extends TestCase
         $unitKerja->update(['id_pembimbing' => $pembimbing->id]);
 
         return [$unitKerja, $pembimbing, $penggunaPembimbing];
+    }
+
+    private function createApprovedIzin(PesertaMagang $peserta, string $mulai, string $selesai): PengajuanIzin
+    {
+        return PengajuanIzin::create([
+            'id_peserta_magang' => $peserta->id,
+            'jenis' => 'izin',
+            'tanggal_mulai' => $mulai,
+            'tanggal_selesai' => $selesai,
+            'keterangan' => 'Kegiatan tetap berjalan selama izin.',
+            'status' => 'approved',
+        ]);
     }
 
     private function createPeserta(UnitKerja $unitKerja, string $username): PesertaMagang
