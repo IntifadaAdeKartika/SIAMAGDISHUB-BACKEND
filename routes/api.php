@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\PesertaMagangController;
 use App\Http\Controllers\Api\Admin\ResetPasswordController;
 use App\Http\Controllers\Api\Admin\UnitKerjaController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\LogbookLampiranController;
 use App\Http\Controllers\Api\NotifikasiController;
 use App\Http\Controllers\Api\Pembimbing\ApproveIzinController;
 use App\Http\Controllers\Api\Pembimbing\DokumenPembimbingController;
@@ -75,6 +76,9 @@ Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
     Route::get('/notifikasi', [NotifikasiController::class, 'index']);
     Route::put('/notifikasi/{id}/read', [NotifikasiController::class, 'markAsRead'])->whereNumber('id');
     Route::put('/notifikasi/read-all', [NotifikasiController::class, 'markAllAsRead']);
+
+    // Lampiran dokumentasi logbook (semua peran, dengan otorisasi per logbook)
+    Route::get('/logbook/{logbook}/lampiran', [LogbookLampiranController::class, 'show']);
 
     // ==========================================
     // B. ADMIN (Role: admin)

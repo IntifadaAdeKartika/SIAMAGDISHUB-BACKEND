@@ -113,22 +113,131 @@ class FileUploadService
      */
     public function downloadResponse(string $path, ?string $filename = null): StreamedResponse
     {
-        if (str_starts_with($path, 'data:')) {
-            [$meta, $data] = explode(';base64,', $path, 2);
-            $mime = str_replace('data:', '', $meta);
-            $decoded = base64_decode($data);
-            $filename = $filename ?: 'file.bin';
+        return $this->fileResponse($path, $filename, 'attachment');
+    }
 
-            return response()->streamDownload(function () use ($decoded): void {
+    /**
+     * Stream a file so the browser can display it directly (images, PDF).
+     */
+    public function inlineResponse(string $path, ?string $filename = null): StreamedResponse
+    {
+        return $this->fileResponse($path, $filename, 'inline');
+    }
+
+    /**
+     * Stream a stored file (disk path or Base64 Data URI) with the requested disposition.
+     */
+    public function fileResponse(string $path, ?string $filename = null, string $disposition = 'attachment'): StreamedResponse
+    {
+        $disposition = $disposition === 'inline' ? 'inline' : 'attachment';
+
+        if (str_starts_with($path, 'data:')) {
+            if (! preg_match('/^data:([^;,]+)?(;base64)?,(.*)$/s', $path, $parts)) {
+                abort(422, 'Format lampiran tidak valid.');
+            }
+
+            $mime = ($parts[1] ?? '') !== '' ? strtolower($parts[1]) : 'application/octet-stream';
+            $isBase64 = ($parts[2] ?? '') === ';base64';
+            $decoded = $isBase64 ? base64_decode($parts[3], true) : rawurldecode($parts[3]);
+
+            if ($decoded === false) {
+                abort(422, 'Isi lampiran tidak valid.');
+            }
+
+            $filename = $this->normalizeFilename($filename, $mime, 'file');
+            $headers = $this->fileHeaders($mime, $filename, $disposition);
+            $headers['Content-Length'] = (string) strlen($decoded);
+
+            return response()->stream(function () use ($decoded): void {
                 echo $decoded;
-            }, $filename, ['Content-Type' => $mime]);
+            }, 200, $headers);
         }
 
         if (! Storage::disk($this->disk)->exists($path)) {
             abort(404, 'File tidak ditemukan di penyimpanan server.');
         }
 
-        return Storage::disk($this->disk)->download($path, $filename);
+        try {
+            $mime = Storage::disk($this->disk)->mimeType($path) ?: 'application/octet-stream';
+        } catch (\Throwable) {
+            $mime = 'application/octet-stream';
+        }
+
+        $filename = $this->normalizeFilename($filename, $mime, basename($path));
+        $headers = $this->fileHeaders($mime, $filename, $disposition);
+
+        try {
+            $headers['Content-Length'] = (string) Storage::disk($this->disk)->size($path);
+        } catch (\Throwable) {
+            // Content-Length is optional; streaming still works without it.
+        }
+
+        $stream = Storage::disk($this->disk)->readStream($path);
+
+        if ($stream === false) {
+            abort(404, 'File tidak ditemukan di penyimpanan server.');
+        }
+
+        return response()->stream(function () use ($stream): void {
+            if (is_resource($stream)) {
+                fpassthru($stream);
+                fclose($stream);
+            }
+        }, 200, $headers);
+    }
+
+    /**
+     * Build response headers that let the browser display or download the file safely.
+     */
+    protected function fileHeaders(string $mime, string $filename, string $disposition): array
+    {
+        $asciiName = preg_replace('/[^\x20-\x7E]/', '_', $filename) ?: 'file';
+        $asciiName = str_replace(['"', '\\', "\r", "\n"], '_', $asciiName);
+
+        return [
+            'Content-Type' => $mime,
+            'Content-Disposition' => $disposition.'; filename="'.$asciiName.'"; filename*=UTF-8\'\''.rawurlencode($filename),
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, max-age=0, no-store',
+        ];
+    }
+
+    /**
+     * Ensure the file name has a useful extension when one can be derived from the MIME type.
+     */
+    protected function normalizeFilename(?string $filename, string $mime, string $fallback): string
+    {
+        $filename = trim((string) ($filename ?: $fallback));
+
+        if ($filename === '') {
+            $filename = 'file';
+        }
+
+        if (pathinfo($filename, PATHINFO_EXTENSION) === '') {
+            $filename .= '.'.$this->extensionForMime($mime);
+        }
+
+        return $filename;
+    }
+
+    protected function extensionForMime(string $mime): string
+    {
+        return [
+            'image/jpeg' => 'jpg',
+            'image/jpg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/bmp' => 'bmp',
+            'image/svg+xml' => 'svg',
+            'application/pdf' => 'pdf',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            'text/plain' => 'txt',
+            'application/zip' => 'zip',
+        ][$mime] ?? 'bin';
     }
 
     /**
