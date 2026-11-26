@@ -258,6 +258,148 @@ class AbsensiController extends Controller
     }
 
     /**
+     * Perbaiki presensi (Check-In/Check-Out) yang ditolak pembimbing.
+     *
+     * Memperbarui baris presensi yang sama agar tidak membuat data duplikat
+     * dan tetap terhubung dengan riwayat penolakan sebelumnya.
+     */
+    public function perbaikan(CheckInRequest $request, Absensi $absensi): JsonResponse
+    {
+        $user = $request->user();
+        $peserta = $user->pesertaMagang;
+
+        if (! $peserta) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profil peserta magang tidak ditemukan.',
+            ], 404);
+        }
+
+        if ((int) $absensi->id_peserta_magang !== (int) $peserta->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Presensi ini bukan milik Anda.',
+            ], 403);
+        }
+
+        if ($absensi->status_verifikasi === 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Presensi yang sudah disetujui tidak dapat diperbaiki.',
+            ], 422);
+        }
+
+        if ($absensi->status_verifikasi !== 'rejected') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya presensi yang ditolak yang dapat diperbaiki.',
+            ], 422);
+        }
+
+        if ((int) $absensi->jumlah_resubmit >= 2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Batas maksimal perbaikan presensi (2 kali) telah tercapai. Silakan hubungi pembimbing.',
+            ], 422);
+        }
+
+        // Aturan GPS/geofencing tetap sama dengan presensi biasa.
+        $geoCheck = $this->geofencing->checkWithinRadius(
+            (float) $request->latitude,
+            (float) $request->longitude
+        );
+
+        if (! $geoCheck['valid']) {
+            return response()->json([
+                'success' => false,
+                'message' => $geoCheck['message'],
+                'data' => [
+                    'closest_office' => $geoCheck['closest_office'],
+                    'details' => $geoCheck['details'],
+                    'max_distance_meters' => $geoCheck['max_distance'],
+                ],
+            ], 422);
+        }
+
+        try {
+            $diperbaiki = DB::transaction(function () use ($request, $absensi, $peserta, $user, $geoCheck): ?Absensi {
+                $absensi = Absensi::query()->whereKey($absensi->getKey())->lockForUpdate()->firstOrFail();
+
+                // Cek ulang di dalam lock agar perbaikan ganda tidak lolos.
+                if (
+                    (int) $absensi->id_peserta_magang !== (int) $peserta->id
+                    || $absensi->status_verifikasi !== 'rejected'
+                    || (int) $absensi->jumlah_resubmit >= 2
+                ) {
+                    return null;
+                }
+
+                $riwayat = is_array($absensi->riwayat_penolakan) ? $absensi->riwayat_penolakan : [];
+
+                // Lampiran lama (sebelum kolom riwayat ada) tetap dipertahankan.
+                if ($riwayat === [] && $absensi->alasan_penolakan) {
+                    $riwayat[] = [
+                        'alasan' => $absensi->alasan_penolakan,
+                        'jenis' => $absensi->status === 'keluar' ? 'check-out' : 'check-in',
+                        'pembimbing_id' => $absensi->diverifikasi_oleh,
+                        'pembimbing_nama' => null,
+                        'pada' => $absensi->diverifikasi_pada?->toISOString(),
+                        'sumber' => 'sebelum_pembaruan',
+                    ];
+                }
+
+                $absensi->update([
+                    'foto_selfie' => $this->handleSelfieUpload($request->foto_selfie),
+                    'lokasi' => $request->lokasi ?: $geoCheck['matched_office']['name'],
+                    'latitude' => $request->latitude,
+                    'longitude' => $request->longitude,
+                    'keterangan' => $request->keterangan,
+                    'status_verifikasi' => 'pending',
+                    'diverifikasi_oleh' => null,
+                    'diverifikasi_pada' => null,
+                    'riwayat_penolakan' => $riwayat,
+                    'jumlah_resubmit' => (int) $absensi->jumlah_resubmit + 1,
+                ]);
+
+                $jenis = $absensi->status === 'keluar' ? 'check-out' : 'check-in';
+
+                ActivityLogger::log(
+                    'PERBAIKAN_PRESENSI',
+                    "Peserta {$user->nama_lengkap} memperbaiki presensi {$jenis} ID {$absensi->id} (perbaikan ke-{$absensi->jumlah_resubmit})."
+                );
+
+                $this->notifyPembimbingPerbaikan($absensi, $user->nama_lengkap);
+
+                return $absensi;
+            });
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memperbaiki presensi: '.$e->getMessage(),
+            ], 500);
+        }
+
+        if (! $diperbaiki) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Presensi tidak dapat diperbaiki karena statusnya sudah berubah. Muat ulang halaman dan coba lagi.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Perbaikan presensi berhasil dikirim dan menunggu verifikasi pembimbing.',
+            'data' => new AbsensiResource($diperbaiki->fresh([
+                'unitKerja.pembimbing.pengguna',
+                'unitKerja.pembimbingByUnit.pengguna',
+                'pesertaMagang.pengguna',
+                'pesertaMagang.unitKerja.pembimbing.pengguna',
+                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+            ])),
+        ]);
+    }
+
+    /**
      * Dapatkan status absensi hari ini milik peserta yang login.
      */
     public function today(Request $request): JsonResponse
@@ -316,6 +458,29 @@ class AbsensiController extends Controller
             'pesan' => "Peserta {$namaPeserta} baru saja melakukan check-in. Mohon segera diverifikasi.",
             'tipe' => 'info',
             'link' => '/pembimbing/absensi.html',
+        ]);
+    }
+
+    private function notifyPembimbingPerbaikan(Absensi $absensi, string $namaPeserta): void
+    {
+        $absensi->loadMissing(['verifikator', 'pesertaMagang']);
+        $idPenggunaPembimbing = $absensi->verifikator?->id_pengguna
+            ?? $absensi->pesertaMagang?->pembimbingLapangan()?->id_pengguna;
+
+        if ($idPenggunaPembimbing === null) {
+            return;
+        }
+
+        $jenis = $absensi->status === 'keluar' ? 'Check-out' : 'Check-in';
+        $tanggal = $absensi->tanggal_jam?->format('d/m/Y') ?? '-';
+
+        Notifikasi::create([
+            'id_pengguna' => $idPenggunaPembimbing,
+            'judul' => 'Perbaikan Presensi',
+            'pesan' => "Peserta {$namaPeserta} mengirim perbaikan presensi {$jenis} tanggal {$tanggal}. Mohon verifikasi ulang.",
+            'tipe' => 'warning',
+            'link' => '/pembimbing/absensi.html',
+            'id_absensi' => $absensi->id,
         ]);
     }
 }

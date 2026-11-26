@@ -18,6 +18,7 @@ class Notifikasi extends Model
         'pesan',
         'tipe',
         'link',
+        'id_absensi',
         'sudah_dibaca',
     ];
 
@@ -31,5 +32,10 @@ class Notifikasi extends Model
     public function pengguna(): BelongsTo
     {
         return $this->belongsTo(Pengguna::class, 'id_pengguna');
+    }
+
+    public function absensi(): BelongsTo
+    {
+        return $this->belongsTo(Absensi::class, 'id_absensi');
     }
 }

@@ -29,6 +29,7 @@ class Absensi extends Model
         'status_verifikasi',
         'alasan_penolakan',
         'jumlah_resubmit',
+        'riwayat_penolakan',
     ];
 
     protected function casts(): array
@@ -38,6 +39,8 @@ class Absensi extends Model
             'diverifikasi_pada' => 'datetime',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
+            'riwayat_penolakan' => 'array',
+            'jumlah_resubmit' => 'integer',
         ];
     }
 

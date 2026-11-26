@@ -119,6 +119,7 @@ Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
         Route::get('/check-out', [AbsensiController::class, 'today']);
         Route::post('/check-out', [AbsensiController::class, 'checkOut']);
         Route::get('/absensi/today', [AbsensiController::class, 'today']);
+        Route::post('/absensi/{absensi}/perbaikan', [AbsensiController::class, 'perbaikan']);
 
         // Logbook Harian
         Route::get('/logbook', [LogbookController::class, 'index']);

@@ -16,6 +16,7 @@ class NotifikasiResource extends JsonResource
             'pesan' => $this->pesan,
             'tipe' => $this->tipe,
             'link' => $this->link,
+            'id_absensi' => $this->id_absensi,
             'sudah_dibaca' => $this->sudah_dibaca,
             'dibuat_pada' => $this->created_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),

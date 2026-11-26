@@ -28,6 +28,8 @@ class AbsensiResource extends JsonResource
             'diverifikasi_pada' => $this->diverifikasi_pada?->toISOString(),
             'status_verifikasi' => $this->status_verifikasi,
             'alasan_penolakan' => $this->alasan_penolakan,
+            'jumlah_resubmit' => (int) ($this->jumlah_resubmit ?? 0),
+            'riwayat_penolakan' => $this->riwayat_penolakan ?? [],
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
             'peserta_magang' => new PesertaMagangResource($this->whenLoaded('pesertaMagang')),
