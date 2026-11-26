@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -9,7 +10,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('absensi', function (Blueprint $table): void {
-            $table->json('riwayat_penolakan')->nullable();
+            $column = DB::connection()->getDriverName() === 'pgsql'
+                ? $table->jsonb('riwayat_penolakan')
+                : $table->json('riwayat_penolakan');
+
+            $column->nullable();
         });
 
         Schema::table('notifikasi', function (Blueprint $table): void {
