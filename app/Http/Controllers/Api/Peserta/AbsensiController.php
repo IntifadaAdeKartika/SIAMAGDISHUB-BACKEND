@@ -9,6 +9,7 @@ use App\Http\Resources\AbsensiResource;
 use App\Models\Absensi;
 use App\Models\Notifikasi;
 use App\Models\PesertaMagang;
+use App\Services\AbsensiRevisionService;
 use App\Services\ActivityLogger;
 use App\Services\FileUploadService;
 use App\Services\GeofencingService;
@@ -17,12 +18,14 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AbsensiController extends Controller
 {
     public function __construct(
         protected GeofencingService $geofencing,
-        protected FileUploadService $fileService
+        protected FileUploadService $fileService,
+        protected AbsensiRevisionService $revisionService
     ) {}
 
     /**
@@ -66,14 +69,45 @@ class AbsensiController extends Controller
                     ->firstOrFail();
 
                 $today = Carbon::today();
-                $checkInQuery = Absensi::where('id_peserta_magang', $peserta->id)
-                    ->where('status', 'masuk')
-                    ->whereDate('tanggal_jam', $today);
-                $hasCheckedIn = $checkInQuery->exists();
 
-                if ($hasCheckedIn) {
-                    $existingCheckIn = $checkInQuery->firstOrFail();
+                if ($request->filled('id_absensi')) {
+                    $existingCheckIn = Absensi::where('id_peserta_magang', $peserta->id)
+                        ->whereKey($request->input('id_absensi'))
+                        ->where('status', 'masuk')
+                        ->lockForUpdate()
+                        ->first();
 
+                    if (! $existingCheckIn) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Data check-in tidak ditemukan atau bukan milik Anda.',
+                        ], 404);
+                    }
+                } else {
+                    $revisiAktif = Absensi::where('id_peserta_magang', $peserta->id)
+                        ->where('status', 'masuk')
+                        ->where('status_verifikasi', 'pending')
+                        ->where('revisi_diminta', true)
+                        ->orderByDesc('tanggal_jam')
+                        ->lockForUpdate()
+                        ->get();
+
+                    if ($revisiAktif->count() > 1) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Terdapat lebih dari satu permintaan revisi check-in. Sertakan id_absensi yang ingin diperbaiki.',
+                        ], 422);
+                    }
+
+                    $existingCheckIn = $revisiAktif->first()
+                        ?? Absensi::where('id_peserta_magang', $peserta->id)
+                            ->where('status', 'masuk')
+                            ->whereDate('tanggal_jam', $today)
+                            ->lockForUpdate()
+                            ->first();
+                }
+
+                if ($existingCheckIn) {
                     if ($existingCheckIn->status_verifikasi === 'rejected' && $existingCheckIn->jumlah_resubmit < 2) {
                         $existingCheckIn->increment('jumlah_resubmit');
                         $existingCheckIn->update([
@@ -92,6 +126,54 @@ class AbsensiController extends Controller
                         return response()->json([
                             'success' => true,
                             'message' => 'Check-in ulang berhasil dicatat.',
+                            'data' => new AbsensiResource($existingCheckIn->fresh([
+                                'unitKerja.pembimbing.pengguna',
+                                'unitKerja.pembimbingByUnit.pengguna',
+                                'pesertaMagang.pengguna',
+                                'pesertaMagang.unitKerja.pembimbing.pengguna',
+                                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+                            ])),
+                        ]);
+                    }
+
+                    if ($existingCheckIn->status_verifikasi === 'rejected') {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Batas maksimal perbaikan presensi (2 kali) telah tercapai. Silakan hubungi pembimbing.',
+                        ], 422);
+                    }
+
+                    if ($existingCheckIn->status_verifikasi === 'pending' && $existingCheckIn->revisi_diminta) {
+                        $fotoPath = $this->handleSelfieUpload($request->foto_selfie);
+                        $lokasiFinal = $request->lokasi ?: $geoCheck['matched_office']['name'];
+
+                        $existingCheckIn->update([
+                            'foto_selfie' => $fotoPath,
+                            'lokasi' => $lokasiFinal,
+                            'latitude' => $request->latitude,
+                            'longitude' => $request->longitude,
+                            'keterangan' => $request->keterangan,
+                        ]);
+
+                        $this->revisionService->catatPerbaikanPeserta($existingCheckIn, [
+                            'tanggal_jam' => $existingCheckIn->tanggal_jam?->toISOString(),
+                            'foto_selfie' => $fotoPath,
+                            'lokasi' => $lokasiFinal,
+                            'latitude' => (string) $request->latitude,
+                            'longitude' => (string) $request->longitude,
+                            'keterangan' => $request->keterangan,
+                            'status' => 'masuk',
+                            'status_verifikasi' => 'pending',
+                        ]);
+
+                        ActivityLogger::log(
+                            'REVISI_CHECK_IN',
+                            "Peserta {$user->nama_lengkap} memperbaiki check-in ID {$existingCheckIn->id} sesuai permintaan revisi."
+                        );
+
+                        return response()->json([
+                            'success' => true,
+                            'message' => 'Perbaikan check-in tersimpan. Silakan kirim hasil revisi untuk diverifikasi pembimbing.',
                             'data' => new AbsensiResource($existingCheckIn->fresh([
                                 'unitKerja.pembimbing.pengguna',
                                 'unitKerja.pembimbingByUnit.pengguna',
@@ -148,10 +230,12 @@ class AbsensiController extends Controller
                     ])),
                 ], 201);
             });
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal check-in: ' . $e->getMessage(),
+                'message' => 'Gagal check-in: '.$e->getMessage(),
                 'error' => $e->getMessage(),
                 'file' => basename($e->getFile()),
                 'line' => $e->getLine(),
@@ -192,69 +276,154 @@ class AbsensiController extends Controller
             ], 422);
         }
 
-        // 2. Pastikan sudah check-in hari ini
-        $today = Carbon::today();
-        $hasCheckIn = Absensi::where('id_peserta_magang', $peserta->id)
-            ->where('status', 'masuk')
-            ->whereDate('tanggal_jam', $today)
-            ->exists();
+        return DB::transaction(function () use ($request, $user, $peserta, $geoCheck): JsonResponse {
+            PesertaMagang::query()->whereKey($peserta->id)->lockForUpdate()->firstOrFail();
 
-        if (! $hasCheckIn) {
+            $today = Carbon::today();
+
+            if ($request->filled('id_absensi')) {
+                $existingCheckOut = Absensi::where('id_peserta_magang', $peserta->id)
+                    ->whereKey($request->input('id_absensi'))
+                    ->where('status', 'keluar')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $existingCheckOut) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Data check-out tidak ditemukan atau bukan milik Anda.',
+                    ], 404);
+                }
+            } else {
+                $revisiAktif = Absensi::where('id_peserta_magang', $peserta->id)
+                    ->where('status', 'keluar')
+                    ->where('status_verifikasi', 'pending')
+                    ->where('revisi_diminta', true)
+                    ->orderByDesc('tanggal_jam')
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($revisiAktif->count() > 1) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Terdapat lebih dari satu permintaan revisi check-out. Sertakan id_absensi yang ingin diperbaiki.',
+                    ], 422);
+                }
+
+                $existingCheckOut = $revisiAktif->first()
+                    ?? Absensi::where('id_peserta_magang', $peserta->id)
+                        ->where('status', 'keluar')
+                        ->whereDate('tanggal_jam', $today)
+                        ->lockForUpdate()
+                        ->first();
+            }
+
+            if ($existingCheckOut) {
+                if ($existingCheckOut->status_verifikasi === 'rejected') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Presensi check-out ini sedang menunggu perbaikan. Gunakan menu perbaikan presensi.',
+                    ], 422);
+                }
+
+                if ($existingCheckOut->status_verifikasi === 'pending' && $existingCheckOut->revisi_diminta) {
+                    $fotoPath = $this->handleSelfieUpload($request->foto_selfie);
+                    $lokasiFinal = $request->lokasi ?: $geoCheck['matched_office']['name'];
+
+                    $existingCheckOut->update([
+                        'foto_selfie' => $fotoPath,
+                        'lokasi' => $lokasiFinal,
+                        'latitude' => $request->latitude,
+                        'longitude' => $request->longitude,
+                        'keterangan' => $request->keterangan,
+                    ]);
+
+                    $this->revisionService->catatPerbaikanPeserta($existingCheckOut, [
+                        'tanggal_jam' => $existingCheckOut->tanggal_jam?->toISOString(),
+                        'foto_selfie' => $fotoPath,
+                        'lokasi' => $lokasiFinal,
+                        'latitude' => (string) $request->latitude,
+                        'longitude' => (string) $request->longitude,
+                        'keterangan' => $request->keterangan,
+                        'status' => 'keluar',
+                        'status_verifikasi' => 'pending',
+                    ]);
+
+                    ActivityLogger::log(
+                        'REVISI_CHECK_OUT',
+                        "Peserta {$user->nama_lengkap} memperbaiki check-out ID {$existingCheckOut->id} sesuai permintaan revisi."
+                    );
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Perbaikan check-out tersimpan. Silakan kirim hasil revisi untuk diverifikasi pembimbing.',
+                        'data' => new AbsensiResource($existingCheckOut->fresh([
+                            'unitKerja.pembimbing.pengguna',
+                            'unitKerja.pembimbingByUnit.pengguna',
+                            'pesertaMagang.pengguna',
+                            'pesertaMagang.unitKerja.pembimbing.pengguna',
+                            'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+                        ])),
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda sudah melakukan check-out untuk hari ini.',
+                    'data' => new AbsensiResource($existingCheckOut),
+                ], 422);
+            }
+
+            if (! $request->filled('id_absensi')) {
+                $hasCheckIn = Absensi::where('id_peserta_magang', $peserta->id)
+                    ->where('status', 'masuk')
+                    ->whereDate('tanggal_jam', $today)
+                    ->exists();
+
+                if (! $hasCheckIn) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Anda belum melakukan check-in hari ini. Tidak dapat melakukan check-out.',
+                    ], 422);
+                }
+            }
+
+            $fotoPath = $this->handleSelfieUpload($request->foto_selfie);
+            $lokasiFinal = $request->lokasi ?: $geoCheck['matched_office']['name'];
+
+            try {
+                DB::statement('ALTER TABLE absensi ALTER COLUMN foto_selfie TYPE TEXT');
+                DB::statement('ALTER TABLE absensi ALTER COLUMN paraf_pembimbing TYPE TEXT');
+            } catch (\Throwable) {
+            }
+
+            $absensi = Absensi::create([
+                'id_peserta_magang' => $peserta->id,
+                'id_unit_kerja' => $peserta->id_unit_kerja,
+                'tanggal_jam' => now(),
+                'foto_selfie' => $fotoPath,
+                'lokasi' => $lokasiFinal,
+                'latitude' => $request->latitude,
+                'longitude' => $request->longitude,
+                'status' => 'keluar',
+                'keterangan' => $request->keterangan,
+                'status_verifikasi' => 'pending',
+            ]);
+
+            ActivityLogger::log('CHECK_OUT', "Peserta {$user->nama_lengkap} melakukan check-out di {$geoCheck['matched_office']['name']} (jarak {$geoCheck['matched_office']['distance']}m)");
+
             return response()->json([
-                'success' => false,
-                'message' => 'Anda belum melakukan check-in hari ini. Tidak dapat melakukan check-out.',
-            ], 422);
-        }
-
-        // 3. Cegah check-out ganda hari ini
-        $existingCheckOut = Absensi::where('id_peserta_magang', $peserta->id)
-            ->where('status', 'keluar')
-            ->whereDate('tanggal_jam', $today)
-            ->first();
-
-        if ($existingCheckOut) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Anda sudah melakukan check-out untuk hari ini.',
-                'data' => new AbsensiResource($existingCheckOut),
-            ], 422);
-        }
-
-        $fotoPath = $this->handleSelfieUpload($request->foto_selfie);
-        $lokasiFinal = $request->lokasi ?: $geoCheck['matched_office']['name'];
-
-        try {
-            DB::statement('ALTER TABLE absensi ALTER COLUMN foto_selfie TYPE TEXT');
-            DB::statement('ALTER TABLE absensi ALTER COLUMN paraf_pembimbing TYPE TEXT');
-        } catch (\Throwable) {
-        }
-
-        $absensi = Absensi::create([
-            'id_peserta_magang' => $peserta->id,
-            'id_unit_kerja' => $peserta->id_unit_kerja,
-            'tanggal_jam' => now(),
-            'foto_selfie' => $fotoPath,
-            'lokasi' => $lokasiFinal,
-            'latitude' => $request->latitude,
-            'longitude' => $request->longitude,
-            'status' => 'keluar',
-            'keterangan' => $request->keterangan,
-            'status_verifikasi' => 'pending',
-        ]);
-
-        ActivityLogger::log('CHECK_OUT', "Peserta {$user->nama_lengkap} melakukan check-out di {$geoCheck['matched_office']['name']} (jarak {$geoCheck['matched_office']['distance']}m)");
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Presensi keluar (Check-Out) berhasil dicatat.',
-            'data' => new AbsensiResource($absensi->load([
-                'unitKerja.pembimbing.pengguna',
-                'unitKerja.pembimbingByUnit.pengguna',
-                'pesertaMagang.pengguna',
-                'pesertaMagang.unitKerja.pembimbing.pengguna',
-                'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
-            ])),
-        ], 201);
+                'success' => true,
+                'message' => 'Presensi keluar (Check-Out) berhasil dicatat.',
+                'data' => new AbsensiResource($absensi->load([
+                    'unitKerja.pembimbing.pengguna',
+                    'unitKerja.pembimbingByUnit.pengguna',
+                    'pesertaMagang.pengguna',
+                    'pesertaMagang.unitKerja.pembimbing.pengguna',
+                    'pesertaMagang.unitKerja.pembimbingByUnit.pengguna',
+                ])),
+            ], 201);
+        });
     }
 
     /**

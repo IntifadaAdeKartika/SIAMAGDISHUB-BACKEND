@@ -19,16 +19,19 @@ use App\Http\Controllers\Api\Pembimbing\DokumenPembimbingController;
 use App\Http\Controllers\Api\Pembimbing\KoreksiLogbookController;
 use App\Http\Controllers\Api\Pembimbing\LaporanPembimbingController;
 use App\Http\Controllers\Api\Pembimbing\MonitoringController;
+use App\Http\Controllers\Api\Pembimbing\PembimbingAbsensiController;
 use App\Http\Controllers\Api\Pembimbing\PembimbingLogbookController;
 use App\Http\Controllers\Api\Pembimbing\PembimbingPengajuanIzinController;
 use App\Http\Controllers\Api\Pembimbing\PesertaBimbinganController;
 use App\Http\Controllers\Api\Pembimbing\RekanPembimbingController;
 use App\Http\Controllers\Api\Pembimbing\VerifikasiAbsensiController;
 use App\Http\Controllers\Api\Peserta\AbsensiController;
+use App\Http\Controllers\Api\Peserta\AbsensiRevisiController;
 use App\Http\Controllers\Api\Peserta\DokumenPesertaController;
 use App\Http\Controllers\Api\Peserta\LogbookController;
 use App\Http\Controllers\Api\Peserta\PengajuanIzinController;
 use App\Http\Controllers\Api\Peserta\RiwayatController;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -53,14 +56,14 @@ Route::get('/migrate-db', function () {
         DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_permohonan TYPE TEXT');
         DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_balasan TYPE TEXT');
 
-        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        Artisan::call('migrate', ['--force' => true]);
 
         return response()->json([
             'success' => true,
             'message' => 'Kolom gambar dan paraf berhasil diubah ke TEXT di database Vercel!',
-            'artisan' => \Illuminate\Support\Facades\Artisan::output(),
+            'artisan' => Artisan::output(),
         ]);
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         return response()->json([
             'success' => false,
             'error' => $e->getMessage(),
@@ -121,6 +124,11 @@ Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
         Route::get('/absensi/today', [AbsensiController::class, 'today']);
         Route::post('/absensi/{absensi}/perbaikan', [AbsensiController::class, 'perbaikan']);
 
+        // Revisi absensi yang diminta pembimbing
+        Route::get('/absensi/revisi', [AbsensiRevisiController::class, 'index']);
+        Route::get('/absensi/revisi/{absensi}', [AbsensiRevisiController::class, 'show'])->whereNumber('absensi');
+        Route::post('/absensi/revisi/{absensi}/kirim', [AbsensiRevisiController::class, 'kirim'])->whereNumber('absensi');
+
         // Logbook Harian
         Route::get('/logbook', [LogbookController::class, 'index']);
         Route::post('/logbook', [LogbookController::class, 'store']);
@@ -158,6 +166,12 @@ Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
 
         // Monitoring Absensi
         Route::get('/monitoring', [MonitoringController::class, 'index']);
+
+        // Daftar, detail, dan revisi absensi peserta bimbingan
+        Route::get('/pembimbing/absensi', [PembimbingAbsensiController::class, 'index']);
+        Route::get('/pembimbing/absensi/{absensi}', [PembimbingAbsensiController::class, 'show'])->whereNumber('absensi');
+        Route::get('/pembimbing/absensi/{absensi}/riwayat', [PembimbingAbsensiController::class, 'riwayat'])->whereNumber('absensi');
+        Route::post('/pembimbing/absensi/{absensi}/minta-revisi', [PembimbingAbsensiController::class, 'mintaRevisi'])->whereNumber('absensi');
 
         // Verifikasi Absensi dengan Paraf Digital
         Route::post('/verifikasi-absensi/{absensi}', [VerifikasiAbsensiController::class, 'verifikasi']);

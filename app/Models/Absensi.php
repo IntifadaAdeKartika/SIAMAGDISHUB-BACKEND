@@ -30,6 +30,11 @@ class Absensi extends Model
         'alasan_penolakan',
         'jumlah_resubmit',
         'riwayat_penolakan',
+        'catatan_pembimbing',
+        'revisi_diminta',
+        'revisi_diminta_pada',
+        'revisi_dikirim_pada',
+        'riwayat_revisi',
     ];
 
     protected function casts(): array
@@ -37,16 +42,42 @@ class Absensi extends Model
         return [
             'tanggal_jam' => 'datetime',
             'diverifikasi_pada' => 'datetime',
+            'revisi_diminta_pada' => 'datetime',
+            'revisi_dikirim_pada' => 'datetime',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'riwayat_penolakan' => 'array',
+            'riwayat_revisi' => 'array',
             'jumlah_resubmit' => 'integer',
+            'revisi_diminta' => 'boolean',
         ];
     }
 
     public function isApproved(): bool
     {
         return $this->status_verifikasi === 'approved';
+    }
+
+    public function menungguRevisi(): bool
+    {
+        return $this->status_verifikasi === 'pending' && $this->revisi_diminta;
+    }
+
+    public function statusRevisi(): ?string
+    {
+        if (! $this->revisi_diminta && empty($this->riwayat_revisi)) {
+            return null;
+        }
+
+        if ($this->status_verifikasi === 'approved') {
+            return 'disetujui';
+        }
+
+        if ($this->status_verifikasi === 'rejected') {
+            return 'ditolak';
+        }
+
+        return $this->revisi_diminta ? 'menunggu_revisi' : 'menunggu_verifikasi';
     }
 
     public function pesertaMagang(): BelongsTo
