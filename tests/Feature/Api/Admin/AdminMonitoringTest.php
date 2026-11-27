@@ -63,7 +63,7 @@ class AdminMonitoringTest extends TestCase
 
         $this->getJson('/backend-api/admin/absensi')
             ->assertOk()
-            ->assertJsonPath('data.per_page', 15)
+            ->assertJsonPath('data.per_page', 20)
             ->assertJsonPath('data.data.0.foto_selfie_url', Storage::disk('public')->url('absensi/selfie.jpg'))
             ->assertJsonPath('data.data.0.peserta_magang.pengguna.nama_lengkap', 'Peserta Contoh');
         $this->getJson('/backend-api/admin/logbook')

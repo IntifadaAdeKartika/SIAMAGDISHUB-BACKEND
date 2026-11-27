@@ -1,5 +1,20 @@
 <?php
 
+$frontendUrl = trim((string) env('FRONTEND_URL', ''));
+
+if ($frontendUrl === '*') {
+    $frontendUrl = '';
+}
+
+$frontendUrl = rtrim($frontendUrl, '/');
+$originLokal = in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)
+    ? [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:5500',
+    ]
+    : [];
+
 return [
 
     /*
@@ -15,23 +30,28 @@ return [
     |
     */
 
-    'paths' => ['backend-api/*', 'api/*', 'sanctum/csrf-cookie', 'storage/*'],
+    'paths' => ['backend-api', 'backend-api/*', 'api/*', 'sanctum/csrf-cookie', 'storage/*'],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
-    'allowed_origins' => array_filter([
-        env('FRONTEND_URL', '*'),
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://127.0.0.1:5500',
+    // Wildcard tidak boleh dipakai karena supports_credentials bernilai true.
+    'allowed_origins' => array_values(array_unique(array_filter([
+        $frontendUrl,
         'https://siamagdishub.vercel.app',
-    ]),
+        ...$originLokal,
+    ]))),
 
-    'allowed_origins_patterns' => [
-        '#^https?://.*\.vercel\.app$#',
+    // Hanya origin produksi yang diizinkan; preview *.vercel.app tidak diaktifkan.
+    'allowed_origins_patterns' => [],
+
+    'allowed_headers' => [
+        'Accept',
+        'Authorization',
+        'Content-Type',
+        'X-Requested-With',
+        'X-CSRF-TOKEN',
+        'X-XSRF-TOKEN',
     ],
-
-    'allowed_headers' => ['*'],
 
     'exposed_headers' => ['Authorization', 'Content-Disposition'],
 

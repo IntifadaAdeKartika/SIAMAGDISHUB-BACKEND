@@ -87,6 +87,21 @@ class AbsensiRevisionFlowTest extends TestCase
         ]);
     }
 
+    public function test_daftar_absensi_pembimbing_per_page_100_berhasil_dan_mendapat_header_cors(): void
+    {
+        for ($menit = 0; $menit < 3; $menit++) {
+            $this->buatAbsensi('masuk', 'pending', Carbon::today()->setTime(8, $menit));
+        }
+
+        $this->actingAs($this->penggunaPembimbing, 'sanctum')
+            ->withHeaders(['Origin' => 'https://siamagdishub.vercel.app'])
+            ->getJson('/backend-api/pembimbing/absensi?per_page=100')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(3, 'data.data')
+            ->assertHeader('Access-Control-Allow-Origin', 'https://siamagdishub.vercel.app');
+    }
+
     public function test_pembimbing_meminta_revisi_check_in_dan_peserta_melihat_permintaan(): void
     {
         $absensi = $this->buatAbsensi('masuk');

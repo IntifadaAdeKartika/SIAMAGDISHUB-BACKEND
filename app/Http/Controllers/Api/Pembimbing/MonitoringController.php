@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Pembimbing;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\AbsensiResource;
+use App\Http\Resources\AbsensiListResource;
 use App\Http\Resources\PesertaMagangResource;
 use App\Models\Absensi;
 use App\Models\PesertaMagang;
@@ -20,7 +20,7 @@ class MonitoringController extends Controller
         $filters = $request->validate([
             'tanggal_mulai' => ['nullable', 'date_format:Y-m-d'],
             'tanggal_selesai' => ['nullable', 'date_format:Y-m-d'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'min:1'],
         ]);
         $pembimbing = $request->user()->pembimbing;
 
@@ -51,14 +51,16 @@ class MonitoringController extends Controller
             $query->whereDate('tanggal_jam', '<=', $filters['tanggal_selesai']);
         }
 
+        $perPage = min(25, max(1, (int) ($filters['per_page'] ?? 20)));
         $absensi = $query
             ->latest('tanggal_jam')
-            ->paginate($filters['per_page'] ?? 20);
+            ->paginate($perPage)
+            ->withQueryString();
 
         return response()->json([
             'success' => true,
             'my_unit_kerja_id' => $pembimbing->id_unit_kerja,
-            'data' => AbsensiResource::collection($absensi)->response()->getData(true),
+            'data' => AbsensiListResource::collection($absensi)->response()->getData(true),
         ]);
     }
 

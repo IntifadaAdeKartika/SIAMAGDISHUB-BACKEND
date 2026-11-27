@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Pembimbing;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\AbsensiResource;
+use App\Http\Resources\AbsensiListResource;
 use App\Http\Resources\LogbookResource;
 use App\Models\Absensi;
 use App\Models\Logbook;
@@ -23,7 +23,7 @@ class LaporanPembimbingController extends Controller
             'peserta_id' => ['nullable', 'integer'],
             'tanggal_mulai' => ['nullable', 'date_format:Y-m-d'],
             'tanggal_selesai' => ['nullable', 'date_format:Y-m-d'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         if (
@@ -67,13 +67,14 @@ class LaporanPembimbingController extends Controller
         $this->applyParticipantScope($query, $pembimbing, $filters);
         $this->applyDateFilters($query, 'tanggal_jam', $filters);
 
+        $perPage = min(25, max(1, (int) ($filters['per_page'] ?? 20)));
         $records = $query
             ->latest('tanggal_jam')
-            ->paginate($filters['per_page'] ?? 20);
+            ->paginate($perPage);
 
         return $this->reportResponse(
             'presensi',
-            AbsensiResource::collection($records->getCollection())->resolve($request),
+            AbsensiListResource::collection($records->getCollection())->resolve($request),
             $records,
         );
     }

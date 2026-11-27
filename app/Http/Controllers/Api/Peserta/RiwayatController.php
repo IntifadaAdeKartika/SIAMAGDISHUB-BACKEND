@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Peserta;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\AbsensiResource;
+use App\Http\Resources\AbsensiListResource;
 use App\Http\Resources\LogbookResource;
 use App\Http\Resources\PengajuanIzinResource;
 use App\Models\Absensi;
@@ -25,7 +25,7 @@ class RiwayatController extends Controller
             return response()->json(['success' => false, 'message' => 'Profil peserta tidak ditemukan.'], 404);
         }
 
-        $limit = (int) $request->input('limit', 10);
+        $limit = min(25, max(1, (int) $request->input('limit', 10)));
 
         $absensi = Absensi::where('id_peserta_magang', $peserta->id)
             ->latest('tanggal_jam')
@@ -45,7 +45,7 @@ class RiwayatController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'riwayat_absensi' => AbsensiResource::collection($absensi),
+                'riwayat_absensi' => AbsensiListResource::collection($absensi),
                 'riwayat_logbook' => LogbookResource::collection($logbook),
                 'riwayat_izin' => PengajuanIzinResource::collection($izin),
             ],

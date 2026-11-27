@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AbsensiMediaController;
 use App\Http\Controllers\Api\Admin\AdminAbsensiController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminLogAktivitasController;
@@ -46,30 +47,17 @@ use Illuminate\Support\Facades\Route;
 // ==========================================
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::get('/migrate-db', function () {
-    try {
-        DB::statement('ALTER TABLE absensi ALTER COLUMN foto_selfie TYPE TEXT');
-        DB::statement('ALTER TABLE absensi ALTER COLUMN paraf_pembimbing TYPE TEXT');
-        DB::statement('ALTER TABLE logbook ALTER COLUMN foto_kegiatan TYPE TEXT');
-        DB::statement('ALTER TABLE logbook ALTER COLUMN paraf_pembimbing TYPE TEXT');
-        DB::statement('ALTER TABLE pengajuan_izin ALTER COLUMN file_surat TYPE TEXT');
-        DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_permohonan TYPE TEXT');
-        DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_balasan TYPE TEXT');
-
-        Artisan::call('migrate', ['--force' => true]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Kolom gambar dan paraf berhasil diubah ke TEXT di database Vercel!',
-            'artisan' => Artisan::output(),
-        ]);
-    } catch (Throwable $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage(),
-        ], 500);
-    }
-});
+// Media absensi disajikan lewat URL bertanda tangan (dipakai tag <img>).
+Route::get('/absensi/{absensi}/media/selfie', [AbsensiMediaController::class, 'selfie'])
+    ->middleware('signed')->whereNumber('absensi')->name('absensi.media.selfie');
+Route::get('/absensi/{absensi}/media/paraf', [AbsensiMediaController::class, 'paraf'])
+    ->middleware('signed')->whereNumber('absensi')->name('absensi.media.paraf');
+Route::get('/absensi/{absensi}/media/revisi/{index}/{posisi}/{field}', [AbsensiMediaController::class, 'revisi'])
+    ->middleware('signed')
+    ->whereNumber(['absensi', 'index'])
+    ->whereIn('posisi', ['sebelum', 'setelah'])
+    ->whereIn('field', ['foto_selfie', 'paraf_pembimbing'])
+    ->name('absensi.media.revisi');
 
 // Group Rute Terproteksi Sanctum & Session Inactivity Timeout (1 menit)
 Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
@@ -93,6 +81,32 @@ Route::middleware(['auth:sanctum', 'inactivity'])->group(function (): void {
         Route::get('/admin/logbook', [AdminLogbookController::class, 'index']);
         Route::get('/admin/pengajuan-izin', [AdminPengajuanIzinController::class, 'index']);
         Route::get('/admin/log-aktivitas', [AdminLogAktivitasController::class, 'index']);
+
+        // Maintenance database khusus admin (tanpa reset/fresh data).
+        Route::get('/migrate-db', function () {
+            try {
+                DB::statement('ALTER TABLE absensi ALTER COLUMN foto_selfie TYPE TEXT');
+                DB::statement('ALTER TABLE absensi ALTER COLUMN paraf_pembimbing TYPE TEXT');
+                DB::statement('ALTER TABLE logbook ALTER COLUMN foto_kegiatan TYPE TEXT');
+                DB::statement('ALTER TABLE logbook ALTER COLUMN paraf_pembimbing TYPE TEXT');
+                DB::statement('ALTER TABLE pengajuan_izin ALTER COLUMN file_surat TYPE TEXT');
+                DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_permohonan TYPE TEXT');
+                DB::statement('ALTER TABLE peserta_magang ALTER COLUMN file_surat_balasan TYPE TEXT');
+
+                Artisan::call('migrate', ['--force' => true]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Kolom gambar dan paraf berhasil diubah ke TEXT di database Vercel!',
+                    'artisan' => Artisan::output(),
+                ]);
+            } catch (Throwable $e) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+        });
 
         // CRUD Master Data
         Route::apiResource('admin/peserta-magang', PesertaMagangController::class);

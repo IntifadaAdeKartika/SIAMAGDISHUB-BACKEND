@@ -281,9 +281,10 @@ class AbsensiRevisionService
                 continue;
             }
 
-            foreach (($row->riwayat_revisi ?? []) as $entri) {
+            foreach (($row->riwayat_revisi ?? []) as $index => $entri) {
                 $riwayat[] = array_merge($entri, [
                     'id_absensi' => $row->id,
+                    'index_riwayat' => $index,
                     'bagian' => $entri['bagian'] ?? $bagian,
                     'tanggal_jam_absensi' => $row->tanggal_jam?->toISOString(),
                     'status_absensi' => $row->status_verifikasi,
@@ -321,6 +322,68 @@ class AbsensiRevisionService
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * Serialisasi riwayat untuk response tanpa mengubah data tersimpan.
+     * Snapshot Base64 diganti URL file bertanda tangan; daftar dapat memilih
+     * untuk tidak menyertakan snapshot sama sekali.
+     *
+     * @param  array<int, array<string, mixed>>  $riwayat
+     * @return array<int, array<string, mixed>>
+     */
+    public function serialisasiRiwayat(
+        array $riwayat,
+        ?int $absensiId = null,
+        bool $denganSnapshot = true
+    ): array {
+        $media = app(AbsensiMediaService::class);
+        $hasil = [];
+
+        foreach (array_values($riwayat) as $index => $entri) {
+            if (! is_array($entri)) {
+                continue;
+            }
+
+            $idAbsensi = (int) ($entri['id_absensi'] ?? $absensiId ?? 0);
+            $indexRiwayat = (int) ($entri['index_riwayat'] ?? $index);
+
+            foreach (['sebelum' => 'data_sebelum', 'setelah' => 'data_setelah'] as $posisi => $key) {
+                if (! $denganSnapshot) {
+                    unset($entri[$key]);
+
+                    continue;
+                }
+
+                if (! is_array($entri[$key] ?? null)) {
+                    continue;
+                }
+
+                foreach (['foto_selfie', 'paraf_pembimbing'] as $field) {
+                    $path = $entri[$key][$field] ?? null;
+                    $url = $media->snapshotUrl(
+                        is_string($path) ? $path : null,
+                        $idAbsensi,
+                        $indexRiwayat,
+                        $posisi,
+                        $field
+                    );
+
+                    if ($url === null) {
+                        unset($entri[$key][$field]);
+
+                        continue;
+                    }
+
+                    $entri[$key][$field] = $url;
+                    $entri[$key][$field.'_url'] = $url;
+                }
+            }
+
+            $hasil[] = $entri;
+        }
+
+        return $hasil;
     }
 
     public function labelBagian(string $bagian): string

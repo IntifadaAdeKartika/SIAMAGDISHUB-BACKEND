@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Api\Peserta;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\AbsensiResource;
+use App\Http\Resources\AbsensiDetailResource;
+use App\Http\Resources\AbsensiListResource;
 use App\Models\Absensi;
 use App\Models\Notifikasi;
 use App\Models\Pembimbing;
@@ -30,7 +31,7 @@ class AbsensiRevisiController extends Controller
 
         $validated = $request->validate([
             'aktif' => ['nullable', 'boolean'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $query = Absensi::query()
@@ -44,12 +45,13 @@ class AbsensiRevisiController extends Controller
             $query->where('revisi_diminta', true)->where('status_verifikasi', 'pending');
         }
 
-        $absensi = $query->orderByDesc('tanggal_jam')->paginate($validated['per_page'] ?? 20);
+        $perPage = min(25, max(1, (int) ($validated['per_page'] ?? 20)));
+        $absensi = $query->orderByDesc('tanggal_jam')->paginate($perPage)->withQueryString();
 
         return response()->json([
             'success' => true,
             'message' => 'Daftar revisi absensi Anda.',
-            'data' => AbsensiResource::collection($absensi)->response()->getData(true),
+            'data' => AbsensiListResource::collection($absensi)->response()->getData(true),
         ]);
     }
 
@@ -88,9 +90,11 @@ class AbsensiRevisiController extends Controller
                 'success' => true,
                 'message' => 'Hasil revisi berhasil dikirim dan menunggu verifikasi pembimbing.',
                 'data' => [
-                    'absensi' => AbsensiResource::collection($rows),
+                    'absensi' => AbsensiListResource::collection($rows),
                     'status_revisi' => $absensi->statusRevisi(),
-                    'riwayat_revisi' => $this->revisionService->riwayatGabungan($absensi),
+                    'riwayat_revisi' => $this->revisionService->serialisasiRiwayat(
+                        $this->revisionService->riwayatGabungan($absensi)
+                    ),
                 ],
             ]);
         });
@@ -105,17 +109,19 @@ class AbsensiRevisiController extends Controller
             'success' => true,
             'message' => 'Detail revisi absensi.',
             'data' => [
-                'absensi' => new AbsensiResource($absensi),
+                'absensi' => new AbsensiDetailResource($absensi),
                 'pasangan' => [
                     'check_in' => $pasangan[AbsensiRevisionService::BAGIAN_CHECK_IN]
-                        ? new AbsensiResource($pasangan[AbsensiRevisionService::BAGIAN_CHECK_IN])
+                        ? new AbsensiDetailResource($pasangan[AbsensiRevisionService::BAGIAN_CHECK_IN])
                         : null,
                     'check_out' => $pasangan[AbsensiRevisionService::BAGIAN_CHECK_OUT]
-                        ? new AbsensiResource($pasangan[AbsensiRevisionService::BAGIAN_CHECK_OUT])
+                        ? new AbsensiDetailResource($pasangan[AbsensiRevisionService::BAGIAN_CHECK_OUT])
                         : null,
                 ],
                 'bagian_revisi_aktif' => $this->revisionService->bagianAktif($absensi),
-                'riwayat_revisi' => $this->revisionService->riwayatGabungan($absensi),
+                'riwayat_revisi' => $this->revisionService->serialisasiRiwayat(
+                    $this->revisionService->riwayatGabungan($absensi)
+                ),
             ],
         ]);
     }
